@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 gates.step(by: step)
             case .stepApp(let step):
                 gates.stepApp(by: step)
+            case .answerFlyBy:
+                self?.flyBy?.answer()
             }
         }
         let flyBy = FlyBy(

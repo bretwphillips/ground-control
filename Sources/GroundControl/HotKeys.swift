@@ -12,6 +12,8 @@ final class HotKeys {
         case stepGate(Int)
         /// ⌃⌥` and ⌃⌥⇧`: the next or previous app in the open gate, wrapping around.
         case stepApp(Int)
+        /// ⌃⌥\: answer the fly-by, or the last app to call in the past minute.
+        case answerFlyBy
     }
 
     var onAction: ((Action) -> Void)?
@@ -44,6 +46,7 @@ final class HotKeys {
         register(kVK_ANSI_RightBracket, base, .stepGate(1))
         register(kVK_ANSI_Grave, base, .stepApp(1))
         register(kVK_ANSI_Grave, base | UInt32(shiftKey), .stepApp(-1))
+        register(kVK_ANSI_Backslash, base, .answerFlyBy)
     }
 
     private func register(_ key: Int, _ modifiers: UInt32, _ action: Action) {

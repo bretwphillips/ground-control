@@ -78,6 +78,9 @@ struct SettingsView: View {
                 Toggle("Fly-by when an app's badge shows a number", isOn: $settings.flyBy)
                 if settings.flyBy {
                     Stepper("Stays for \(Int(settings.flyBySeconds)) seconds", value: $settings.flyBySeconds, in: 2...20)
+                    Text("⌃⌥\\ answers it without clicking: it opens the app's gate, or the app on its own. It still works for a minute after the fly-by leaves.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("Show a live preview of the app's window", isOn: $settings.flyByPreview)
                     if settings.flyByPreview {
                         PermissionNote(

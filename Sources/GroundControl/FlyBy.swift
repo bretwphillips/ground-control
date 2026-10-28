@@ -21,6 +21,8 @@ final class FlyBy {
     private var flight: Flight?
     private var queue: [StripApp] = []
     private var lastFlight: [String: Date] = [:]
+    /// The last app that called, preview or not, for answering it from the keyboard.
+    private var lastCaller: (app: StripApp, at: Date)?
     private var timer: Timer?
 
     init(settings: Settings, permissions: Permissions, runway: @escaping () -> CGRect?, land: @escaping (StripApp) -> Void) {
@@ -34,11 +36,24 @@ final class FlyBy {
     }
 
     func call(_ app: StripApp, preview: Bool) {
+        lastCaller = (app, Date())
         guard settings.flyByPreview, permissions.screenRecording else { return }
         // One fly-by a minute per app, so a busy channel can't keep pulling attention away.
         if !preview, let last = lastFlight[app.id], Date().timeIntervalSince(last) < 60 { return }
         guard flight?.app.id != app.id, !queue.contains(where: { $0.id == app.id }) else { return }
         queue.append(app)
+    }
+
+    /// Answers the fly-by from the keyboard, as clicking it would; once it's gone, the last app to
+    /// call within the past minute.
+    func answer() {
+        if let current = flight {
+            land(current.app)
+            end()
+        } else if let caller = lastCaller, Date().timeIntervalSince(caller.at) < 60 {
+            land(caller.app)
+        }
+        lastCaller = nil
     }
 
     private func tick() {

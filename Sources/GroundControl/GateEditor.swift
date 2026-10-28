@@ -208,6 +208,8 @@ final class GateEditorModel: ObservableObject {
     @Published var layout: GateLayout?
     /// Apps whose window can't shrink to their zone, with the size they need.
     @Published var tooSmall: [String: CGSize] = [:]
+    /// Why the last drop was turned away, shown for a few seconds.
+    @Published var notice: String?
     /// The smallest each app's window has allowed, learned as it refuses and kept between gates;
     /// borders stop there and new splits make room for it.
     private(set) var minimums: [String: CGSize]
@@ -241,7 +243,12 @@ final class GateEditorModel: ObservableObject {
     func insert(_ id: String, beside target: String, at edge: GateLayout.Edge) {
         guard id != target, let layout else { return }
         let without = layout.removing(id) ?? .app(target)
-        self.layout = fit(without.inserting(id, beside: target, at: edge), in: canvas)
+        let candidate = fit(without.inserting(id, beside: target, at: edge), in: canvas)
+        guard fits(candidate, in: canvas) else {
+            turnAway(id)
+            return
+        }
+        self.layout = candidate
     }
 
     /// A window refused to shrink past this; the layout makes room for it.
@@ -251,8 +258,39 @@ final class GateEditorModel: ObservableObject {
         guard updated != known else { return }
         minimums[id] = updated
         UserDefaults.standard.set(minimums.mapValues { [$0.width, $0.height] }, forKey: Self.minimumsKey)
-        if let layout {
-            self.layout = fit(layout, in: canvas)
+        guard let layout else { return }
+        let fitted = fit(layout, in: canvas)
+        if fits(fitted, in: canvas) {
+            self.layout = fitted
+        } else {
+            // Only found out once its window refused; it leaves the gate instead of spilling over.
+            self.layout = fit(layout.removing(id) ?? layout, in: canvas)
+            tooSmall[id] = nil
+            turnAway(id)
+        }
+    }
+
+    private func turnAway(_ id: String) {
+        let size = minimums[id].map { " (at least \(Int($0.width))×\(Int($0.height)))" } ?? ""
+        let message = "\(AppIcon.name(id)) needs more room\(size). Make space for it, then drop it again."
+        notice = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            if self?.notice == message { self?.notice = nil }
+        }
+    }
+
+    /// Whether every window gets at least the room it needs.
+    private func fits(_ node: GateLayout, in size: CGSize) -> Bool {
+        switch node {
+        case .app(let id):
+            let needed = minimums[id] ?? .zero
+            return needed.width <= size.width + 1 && needed.height <= size.height + 1
+        case .split(let axis, let children, let ratios):
+            return children.indices.allSatisfy { index in
+                fits(children[index], in: axis == .columns
+                    ? CGSize(width: ratios[index] * size.width, height: size.height)
+                    : CGSize(width: size.width, height: ratios[index] * size.height))
+            }
         }
     }
 
@@ -282,6 +320,7 @@ final class GateEditorModel: ObservableObject {
 
     func remove(_ id: String) {
         layout = layout?.removing(id)
+        tooSmall[id] = nil
     }
 
     func setRatios(_ ratios: [Double], at path: [Int]) {
@@ -326,7 +365,21 @@ private struct GateOverlay: View {
             .background(.regularMaterial, in: Capsule())
             .shadow(radius: 8)
             .padding(.top, 16)
+
+            if let notice = model.notice {
+                Label(notice, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.orange, in: Capsule())
+                    .shadow(radius: 8)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 24)
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: model.notice)
     }
 }
 

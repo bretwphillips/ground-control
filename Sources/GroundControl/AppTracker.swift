@@ -14,9 +14,10 @@ enum Attention: Comparable {
     case urgent
 
     var color: Color {
-        // Two shades of "look when you can" read as one.
+        // Each level also has its own badge shape, so none of this relies on colour alone.
         switch self {
-        case .unread, .finished: .blue
+        case .unread: .blue
+        case .finished: .green
         case .mention: .orange
         case .urgent: .red
         }

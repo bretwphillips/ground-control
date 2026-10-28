@@ -32,14 +32,12 @@ final class GateEditor {
         self.runway = runway
         store.editing = true
 
-        // An empty desktop to build on. macOS ignores a background app asking to hide the active
-        // one, so Ground Control comes forward first; the gate's own apps reappear as they're placed.
+        // An empty desktop to build on; the gate's own apps reappear as they're placed.
         let own = Bundle.main.bundleIdentifier
         previousFront = NSWorkspace.shared.frontmostApplication
         hiddenByUs = NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular && $0.bundleIdentifier != own && !$0.isHidden
         }
-        NSApp.activate()
 
         let model = GateEditorModel(name: name, layout: layout)
         self.model = model
@@ -56,34 +54,17 @@ final class GateEditor {
         panel.makeKeyAndOrderFront(nil)
 
         cancellable = model.$layout.sink { [weak self] layout in self?.scheduleApply(layout) }
-        clearDesktop(attempts: 10)
+        keepHidden(attempts: 20)
     }
 
-    /// Hide Others spares the active app, and activation takes a moment to land, so this waits for
-    /// Ground Control to be active and hides whatever was in front by name too.
-    private func clearDesktop(attempts: Int) {
-        guard panel != nil else { return }
-        if NSApp.isActive || attempts == 0 {
-            NSApp.hideOtherApplications(nil)
-            log.notice("editor: cleared desktop, active: \(NSApp.isActive)")
-            keepHidden(attempts: 20)
-            // Apps already in the gate come back.
-            apply(latest)
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.clearDesktop(attempts: attempts - 1)
-        }
-    }
-
-    /// The app that was in front can refuse to hide while it's still giving up focus, so anything
-    /// outside the gate is hidden again until it stays hidden.
+    /// Hides everything outside the gate, again until it stays hidden: an app can still be
+    /// finishing a switch when it's first asked.
     private func keepHidden(attempts: Int) {
         guard panel != nil, attempts > 0 else { return }
         let gate = Set(latest?.leaves ?? [])
         let showing = hiddenByUs.filter { !$0.isHidden && !gate.contains($0.bundleIdentifier ?? "") }
         guard !showing.isEmpty else { return }
-        showing.forEach { $0.hide() }
+        showing.forEach(hide)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.keepHidden(attempts: attempts - 1)
         }
@@ -129,7 +110,7 @@ final class GateEditor {
         let frames = layout?.frames(in: WindowMover.axFrame(runway)) ?? []
         let ids = Set(frames.map(\.id))
         for id in placed.subtracting(ids) {
-            running(id)?.hide()
+            running(id).map(hide)
         }
         for (id, frame) in frames {
             guard let app = running(id) else {
@@ -151,9 +132,14 @@ final class GateEditor {
                 continue
             }
             if landed.width > frame.width + 1 || landed.height > frame.height + 1 {
-                // Its minimum is bigger than the zone: it keeps the zone's corner, and the zone says
-                // how much room it needs.
+                // Its minimum is bigger than the zone: it keeps the zone's corner, the zone says how
+                // much room it needs, and borders won't squeeze it further.
                 model?.tooSmall[id] = landed.size
+                let known = model?.minimums[id] ?? .zero
+                model?.minimums[id] = CGSize(
+                    width: landed.width > frame.width + 1 ? max(known.width, landed.width) : known.width,
+                    height: landed.height > frame.height + 1 ? max(known.height, landed.height) : known.height
+                )
                 WindowMover.setFrame(window, CGRect(origin: frame.origin, size: landed.size))
             } else {
                 // It can't grow (Calculator), so it sits in the middle of its zone.
@@ -186,6 +172,16 @@ final class GateEditor {
         }
     }
 
+    /// macOS ignores a background app asking to hide the active one, but Accessibility can hide any
+    /// app without Ground Control having to take focus first.
+    private func hide(_ app: NSRunningApplication) {
+        if permissions.accessibility {
+            AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, kCFBooleanTrue)
+        } else {
+            app.hide()
+        }
+    }
+
     private func running(_ id: String) -> NSRunningApplication? {
         NSRunningApplication.runningApplications(withBundleIdentifier: id).first
     }
@@ -212,6 +208,21 @@ final class GateEditorModel: ObservableObject {
     @Published var layout: GateLayout?
     /// Apps whose window can't shrink to their zone, with the size they need.
     @Published var tooSmall: [String: CGSize] = [:]
+    /// The smallest each app's window has allowed, learned as it refuses; borders stop there.
+    var minimums: [String: CGSize] = [:]
+
+    /// The smallest a part of the layout can be along `axis`, from what its windows have allowed.
+    func minimum(of node: GateLayout, along axis: GateLayout.Axis) -> CGFloat {
+        switch node {
+        case .app(let id):
+            let size = minimums[id] ?? .zero
+            return axis == .columns ? size.width : size.height
+        case .split(let splitAxis, let children, _):
+            let parts = children.map { minimum(of: $0, along: axis) }
+            // Side by side the minimums add up; stacked across, the widest one decides.
+            return splitAxis == axis ? parts.reduce(0, +) : parts.max() ?? 0
+        }
+    }
 
     init(name: String, layout: GateLayout?) {
         self.name = name
@@ -361,7 +372,8 @@ private struct SplitView: View {
                         .gesture(
                             DragGesture(coordinateSpace: .named("gate"))
                                 .onChanged { value in
-                                    resize(index, by: columns ? value.translation.width / size.width : value.translation.height / size.height)
+                                    let length = columns ? size.width : size.height
+                                    resize(index, by: (columns ? value.translation.width : value.translation.height) / length, length: length)
                                 }
                                 .onEnded { _ in dragStart = nil }
                         )
@@ -370,14 +382,18 @@ private struct SplitView: View {
         }
     }
 
-    /// Moves the border before child `index`, trading space between the two apps beside it.
-    private func resize(_ index: Int, by delta: Double) {
+    /// Moves the border before child `index`, trading space between the two apps beside it, and
+    /// stops where either would go below what its windows allow.
+    private func resize(_ index: Int, by delta: Double, length: CGFloat) {
         let base = dragStart ?? ratios
         dragStart = base
         let pair = base[index - 1] + base[index]
-        guard pair > 0.2 else { return }
+        let floor = 0.05
+        let before = max(floor, model.minimum(of: children[index - 1], along: axis) / length)
+        let after = max(floor, model.minimum(of: children[index], along: axis) / length)
+        guard pair >= before + after else { return }
         var updated = base
-        updated[index - 1] = min(max(base[index - 1] + delta, 0.1), pair - 0.1)
+        updated[index - 1] = min(max(base[index - 1] + delta, before), pair - after)
         updated[index] = pair - updated[index - 1]
         model.setRatios(updated, at: path)
     }

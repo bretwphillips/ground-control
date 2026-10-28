@@ -36,10 +36,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         edgeItem.submenu = edges
         menu.addItem(edgeItem)
 
-        let unhide = NSMenuItem(title: "Show Hidden Apps", action: #selector(showHiddenApps), keyEquivalent: "")
-        unhide.target = self
-        unhide.isEnabled = !settings.hiddenApps.isEmpty
-        menu.addItem(unhide)
+        let apps = NSMenu()
+        let own = Bundle.main.bundleIdentifier
+        let running = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != own }
+            .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
+        for app in running {
+            guard let id = app.bundleIdentifier else { continue }
+            let item = NSMenuItem(title: app.localizedName ?? id, action: #selector(toggleApp(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = id
+            item.state = settings.hiddenApps.contains(id) ? .off : .on
+            apps.addItem(item)
+        }
+        let appsItem = NSMenuItem(title: "Apps in Strip", action: nil, keyEquivalent: "")
+        appsItem.submenu = apps
+        menu.addItem(appsItem)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Ground Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -50,7 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.edge = edge
     }
 
-    @objc private func showHiddenApps() {
-        settings.hiddenApps = []
+    @objc private func toggleApp(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        if settings.hiddenApps.contains(id) {
+            settings.hiddenApps.remove(id)
+        } else {
+            settings.hiddenApps.insert(id)
+        }
     }
 }

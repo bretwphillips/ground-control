@@ -1,0 +1,47 @@
+import AppKit
+
+enum TowerIcon {
+    /// A control tower for the menu bar: an antenna, a glazed cab wider than its shaft, and the
+    /// shaft flaring to the ground. A template, so it follows the menu bar's appearance.
+    static func image() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
+            NSColor.black.setFill()
+            NSColor.black.setStroke()
+
+            let antenna = NSBezierPath()
+            antenna.move(to: NSPoint(x: 9, y: 0.5))
+            antenna.line(to: NSPoint(x: 9, y: 3.5))
+            antenna.lineWidth = 1.2
+            antenna.stroke()
+
+            // Roof, then the cab, then a band of windows cut out of it.
+            NSBezierPath(roundedRect: NSRect(x: 4.5, y: 3.5, width: 9, height: 1.6), xRadius: 0.6, yRadius: 0.6).fill()
+            let cab = NSBezierPath()
+            cab.move(to: NSPoint(x: 3.5, y: 5.1))
+            cab.line(to: NSPoint(x: 14.5, y: 5.1))
+            cab.line(to: NSPoint(x: 13, y: 9.2))
+            cab.line(to: NSPoint(x: 5, y: 9.2))
+            cab.close()
+            cab.fill()
+            NSGraphicsContext.current?.compositingOperation = .clear
+            for x in [5.6, 8.1, 10.6] {
+                NSBezierPath(rect: NSRect(x: x, y: 6.1, width: 1.8, height: 2)).fill()
+            }
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+
+            let shaft = NSBezierPath()
+            shaft.move(to: NSPoint(x: 7.2, y: 9.2))
+            shaft.line(to: NSPoint(x: 10.8, y: 9.2))
+            shaft.line(to: NSPoint(x: 11.8, y: 16.2))
+            shaft.line(to: NSPoint(x: 6.2, y: 16.2))
+            shaft.close()
+            shaft.fill()
+
+            NSBezierPath(roundedRect: NSRect(x: 4, y: 16.2, width: 10, height: 1.5), xRadius: 0.5, yRadius: 0.5).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Ground Control"
+        return image
+    }
+}

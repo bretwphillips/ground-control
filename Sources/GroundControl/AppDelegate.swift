@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gateStore)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "airplane", accessibilityDescription: "Ground Control")
+        item.button?.image = TowerIcon.image()
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu

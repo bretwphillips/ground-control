@@ -153,9 +153,18 @@ final class GateEditor {
             let wasHidden = app.isHidden
             show(app)
             guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
-                if permissions.accessibility, WindowMover.hasWindowElsewhere(app.processIdentifier) {
-                    // Accessibility only sees windows on the desktop in view.
-                    model?.elsewhere.insert(id)
+                if permissions.accessibility, let minimized = WindowMover.minimizedWindow(of: app.processIdentifier) {
+                    AXUIElementSetAttributeValue(minimized, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+                    applyAgain(after: 0.6)
+                } else if permissions.accessibility, !wasHidden, WindowMover.hasWindowElsewhere(app.processIdentifier) {
+                    // Accessibility only sees windows on the desktop in view. A window it misses
+                    // may also be minimized, which reopening restores; if that doesn't bring one,
+                    // it's on another desktop.
+                    if opened.contains(id) {
+                        model?.elsewhere.insert(id)
+                    } else {
+                        openWindow(id)
+                    }
                 } else {
                     // Running with every window closed, like Calendar after ⌘W.
                     log.notice("editor: no window for \(id, privacy: .public)")
@@ -172,14 +181,7 @@ final class GateEditor {
                 applyAgain(after: 2.5)
                 continue
             }
-            // A just-unhidden app isn't in the on-screen list yet; it's checked on the next pass.
-            if wasHidden {
-                applyAgain(after: 0.4)
-            } else if !WindowMover.isOnThisDesktop(app.processIdentifier) {
-                // macOS gives apps no way to move a window between desktops; only the user can.
-                model?.elsewhere.insert(id)
-                continue
-            }
+            // Accessibility sees it, so it's on this desktop.
             model?.elsewhere.remove(id)
             let before = WindowMover.frame(of: window)
             if homes[id] == nil, let before {

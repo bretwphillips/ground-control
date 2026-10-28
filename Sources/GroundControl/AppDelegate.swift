@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settings: settings,
             permissions: permissions,
             runway: { [weak strip] in strip?.runway() },
-            land: { [weak strip] app in strip?.land(app) }
+            land: { [weak strip] app in strip?.bringUp(app) }
         )
         tracker.onCall = { [weak flyBy] app, preview in flyBy?.call(app, preview: preview) }
         self.tracker = tracker

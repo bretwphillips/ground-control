@@ -146,7 +146,9 @@ final class GateController {
         editor = GateEditor(permissions: permissions, store: store)
     }
 
-    func open(_ gate: Gate) {
+    /// `focus` is the app to end up in front; by default the app in front keeps focus if it's in
+    /// the gate, otherwise the gate's first app gets it.
+    func open(_ gate: Gate, focus wanted: String? = nil) {
         store.current = gate.id
         openedAt = Date()
         settled = [:]
@@ -154,9 +156,8 @@ final class GateController {
         guard let runway = runway().map(WindowMover.axFrame) else { return }
         let frames = gate.layout.frames(in: runway)
 
-        // The app in front keeps focus if it's part of the gate; otherwise the first one gets it.
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let focus = frames.first { $0.id == front }?.id ?? frames.first?.id
+        let focus = frames.first { $0.id == wanted }?.id ?? frames.first { $0.id == front }?.id ?? frames.first?.id
         var order = frames.filter { $0.id != focus }
         order += frames.filter { $0.id == focus }
 
@@ -176,6 +177,12 @@ final class GateController {
             delay += 0.04
         }
         log.notice("gate: \(gate.name, privacy: .public)")
+    }
+
+    /// The gate an app belongs to: the open one if it's there, otherwise the first that has it.
+    func gate(for id: String) -> Gate? {
+        let gates = store.gates.filter { $0.layout.leaves.contains(id) }
+        return gates.first { $0.id == store.current } ?? gates.first
     }
 
     func newGate() {

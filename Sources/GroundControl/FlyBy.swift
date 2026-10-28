@@ -66,7 +66,7 @@ final class FlyBy {
         var current = Flight(app: app, panel: panel, until: Date() + settings.flyBySeconds)
         let id = current.id
         current.capture = Task { @MainActor [weak self] in
-            guard let window = await Self.biggestWindow(of: app.pid) else {
+            guard let window = await AppWindows.main(of: app.pid) else {
                 self?.end()
                 return
             }
@@ -83,8 +83,11 @@ final class FlyBy {
             config.height = Int((size.height - FlyByPanel.titleHeight) * 2)
             config.showsCursor = false
             while !Task.isCancelled, self?.flight?.id == id {
-                if let image = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) {
+                do {
+                    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
                     panel.model.image = NSImage(cgImage: image, size: .zero)
+                } catch {
+                    log.error("capture failed: \(error.localizedDescription, privacy: .public)")
                 }
                 try? await Task.sleep(for: .milliseconds(250))
             }
@@ -112,15 +115,6 @@ final class FlyBy {
             width = height / aspect
         }
         return CGSize(width: width, height: height + FlyByPanel.titleHeight)
-    }
-
-    private static func biggestWindow(of pid: pid_t) async -> SCWindow? {
-        guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false) else {
-            return nil
-        }
-        return content.windows
-            .filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 100 && $0.frame.height > 100 }
-            .max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
     }
 }
 

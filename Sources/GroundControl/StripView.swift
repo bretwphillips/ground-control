@@ -16,7 +16,7 @@ struct StripView: View {
                     Tile(
                         app: app,
                         size: settings.size,
-                        preview: settings.previews ? previews.images[app.pid] : nil,
+                        preview: previews.images[app.pid],
                         landed: app.id == tracker.landed,
                         calling: tracker.calling.contains(app.id)
                     )

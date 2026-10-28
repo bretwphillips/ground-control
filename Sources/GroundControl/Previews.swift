@@ -1,7 +1,7 @@
 import AppKit
 import ScreenCaptureKit
 
-/// Small pictures of each app's biggest window, for the large strip. Needs Screen Recording.
+/// Small pictures of each app's main window, for the large strip. Needs Screen Recording.
 final class Previews: ObservableObject {
     @Published private(set) var images: [pid_t: NSImage] = [:]
 
@@ -21,7 +21,7 @@ final class Previews: ObservableObject {
     }
 
     private func refresh() {
-        guard settings.size == .large, settings.previews, permissions.screenRecording, !busy else { return }
+        guard settings.size == .large, permissions.screenRecording, !busy else { return }
         busy = true
         let pids = tracker.apps.map(\.pid)
         Task { @MainActor in
@@ -31,12 +31,7 @@ final class Previews: ObservableObject {
             }
             var latest = self.images.filter { pids.contains($0.key) }
             for pid in pids {
-                let windows = content.windows.filter {
-                    $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 100 && $0.frame.height > 100
-                }
-                guard let window = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else {
-                    continue
-                }
+                guard let window = AppWindows.main(of: pid, in: content) else { continue }
                 let config = SCStreamConfiguration()
                 let scale = 300 / window.frame.width
                 config.width = Int(window.frame.width * scale)

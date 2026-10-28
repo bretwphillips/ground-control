@@ -60,10 +60,18 @@ final class GateEditor {
     /// Hides everything outside the gate, again until it stays hidden: an app can still be
     /// finishing a switch when it's first asked.
     private func keepHidden(attempts: Int) {
-        guard panel != nil, attempts > 0 else { return }
+        guard panel != nil else { return }
+        guard attempts > 0 else {
+            probeMinimums()
+            return
+        }
         let gate = Set(latest?.leaves ?? [])
         let showing = hiddenByUs.filter { !$0.isHidden && !gate.contains($0.bundleIdentifier ?? "") }
-        guard !showing.isEmpty else { return }
+        guard !showing.isEmpty else {
+            probeMinimums()
+            return
+        }
+        log.notice("editor: still showing \(showing.compactMap(\.bundleIdentifier).joined(separator: ", "), privacy: .public)")
         showing.forEach(hide)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.keepHidden(attempts: attempts - 1)
@@ -117,21 +125,29 @@ final class GateEditor {
                 openWindow(id)
                 continue
             }
-            app.unhide()
+            show(app)
             guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
                 // Running with every window closed, like Calendar after ⌘W.
+                log.notice("editor: no window for \(id, privacy: .public)")
                 openWindow(id)
                 continue
             }
-            if homes[id] == nil, let home = WindowMover.frame(of: window) {
-                homes[id] = (window, home)
+            let before = WindowMover.frame(of: window)
+            if homes[id] == nil, let before {
+                homes[id] = (window, before)
             }
             WindowMover.setFrame(window, frame)
-            guard let landed = WindowMover.frame(of: window), landed.size != frame.size else {
+            let landed = WindowMover.frame(of: window)
+            log.notice("editor: \(id, privacy: .public) to \(String(describing: frame), privacy: .public), now \(String(describing: landed), privacy: .public), hidden: \(app.isHidden)")
+            guard let landed, landed.size != frame.size else {
                 model?.tooSmall[id] = nil
                 continue
             }
-            if landed.width > frame.width + 1 || landed.height > frame.height + 1 {
+            if landed.size == before?.size {
+                // Didn't change size at all: it ignores resizing (it manages its own frame), which
+                // says nothing about how small it can go.
+                model?.tooSmall[id] = landed.size
+            } else if landed.width > frame.width + 1 || landed.height > frame.height + 1 {
                 // Its minimum is bigger than the zone: it keeps the zone's corner, the zone says how
                 // much room it needs, and borders won't squeeze it further.
                 model?.tooSmall[id] = landed.size
@@ -175,10 +191,40 @@ final class GateEditor {
     /// macOS ignores a background app asking to hide the active one, but Accessibility can hide any
     /// app without Ground Control having to take focus first.
     private func hide(_ app: NSRunningApplication) {
+        setHidden(app, true)
+    }
+
+    private func show(_ app: NSRunningApplication) {
+        setHidden(app, false)
+    }
+
+    private func setHidden(_ app: NSRunningApplication, _ hidden: Bool) {
         if permissions.accessibility {
-            AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, kCFBooleanTrue)
-        } else {
+            let value = hidden ? kCFBooleanTrue : kCFBooleanFalse
+            AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, value!)
+        } else if hidden {
             app.hide()
+        } else {
+            app.unhide()
+        }
+    }
+
+    /// While the other apps are hidden, their windows can be shrunk and put back unseen, which
+    /// tells each one's minimum size before it's ever dropped.
+    private func probeMinimums() {
+        guard permissions.accessibility, let model, panel != nil else { return }
+        let gate = Set(latest?.leaves ?? [])
+        for app in hiddenByUs where app.isHidden {
+            guard let id = app.bundleIdentifier, !gate.contains(id), model.minimums[id] == nil,
+                  let window = WindowMover.mainWindow(of: app.processIdentifier),
+                  let home = WindowMover.frame(of: window) else { continue }
+            WindowMover.setFrame(window, CGRect(origin: home.origin, size: CGSize(width: 1, height: 1)))
+            let smallest = WindowMover.frame(of: window)?.size
+            WindowMover.setFrame(window, home)
+            // Unchanged means it ignores resizing, not that it can't get any smaller.
+            guard let smallest, smallest != home.size else { continue }
+            model.learn(id, width: smallest.width, height: smallest.height)
+            log.notice("editor: \(id, privacy: .public) can shrink to \(String(describing: smallest), privacy: .public)")
         }
     }
 
@@ -237,6 +283,8 @@ final class GateEditorModel: ObservableObject {
         self.canvas = canvas
         let saved = UserDefaults.standard.dictionary(forKey: Self.minimumsKey) as? [String: [Double]] ?? [:]
         minimums = saved.compactMapValues { $0.count == 2 ? CGSize(width: $0[0], height: $0[1]) : nil }
+            // Bigger than the whole runway was learned from an app that ignores resizing.
+            .filter { $0.value.width < canvas.width && $0.value.height < canvas.height }
     }
 
     /// Dropping an app already in the gate moves it.

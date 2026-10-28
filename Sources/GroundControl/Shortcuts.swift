@@ -56,7 +56,7 @@ struct Shortcut: Codable, Equatable {
 }
 
 enum ShortcutAction: String, CaseIterable {
-    case gateLeft, gateRight, back, appNext, appPrevious, answer
+    case gateLeft, gateRight, back, appNext, appPrevious, answer, desktop
 
     var title: String {
         switch self {
@@ -66,6 +66,7 @@ enum ShortcutAction: String, CaseIterable {
         case .appNext: "Next app in the gate"
         case .appPrevious: "Previous app in the gate"
         case .answer: "Answer the fly-by"
+        case .desktop: "Show the desktop"
         }
     }
 
@@ -80,6 +81,7 @@ enum ShortcutAction: String, CaseIterable {
         case .appNext: Shortcut(keyCode: UInt32(kVK_ANSI_N), modifiers: base, key: "N")
         case .appPrevious: Shortcut(keyCode: UInt32(kVK_ANSI_N), modifiers: base | UInt32(shiftKey), key: "N")
         case .answer: Shortcut(keyCode: UInt32(kVK_ANSI_M), modifiers: base, key: "M")
+        case .desktop: Shortcut(keyCode: UInt32(kVK_ANSI_0), modifiers: base, key: "0")
         }
     }
 }

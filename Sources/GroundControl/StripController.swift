@@ -7,7 +7,8 @@ final class StripPanel: NSPanel {
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        // Not on full-screen desktops: their windows can't be resized, so the strip would cover them.
+        collectionBehavior = [.canJoinAllSpaces, .stationary]
         isFloatingPanel = true
         hidesOnDeactivate = false
         isOpaque = false

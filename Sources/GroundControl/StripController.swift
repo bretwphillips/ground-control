@@ -187,6 +187,15 @@ final class StripController {
         peeks.hover(found?.0, tile: found?.1 ?? .zero, strip: frame, edge: settings.edge)
     }
 
+    /// Brings the app up in its gate if it has one, otherwise on its own.
+    func bringUp(_ app: StripApp) {
+        if let gate = gates.gate(for: app.id) {
+            gates.open(gate, focus: app.id)
+        } else {
+            land(app)
+        }
+    }
+
     func land(_ app: StripApp) {
         // A single app takes over from whatever gate was open.
         gates.store.current = nil

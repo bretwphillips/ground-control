@@ -10,6 +10,9 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 cp .build/release/GroundControl "$app/Contents/MacOS/"
 cp Resources/Info.plist "$app/Contents/"
-codesign --force --sign - "$app"
+# Signed with scripts/make-cert.sh's identity when it exists, so the Accessibility grant survives rebuilds.
+identity="Ground Control Dev"
+security find-certificate -c "$identity" >/dev/null 2>&1 || identity="-"
+codesign --force --sign "$identity" "$app"
 
 echo "$app"

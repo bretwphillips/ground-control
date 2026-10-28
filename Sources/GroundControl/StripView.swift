@@ -10,6 +10,17 @@ struct StripView: View {
         let layout = horizontal ? AnyLayout(HStackLayout(spacing: 4)) : AnyLayout(VStackLayout(spacing: 4))
 
         layout {
+            if !tracker.trusted {
+                Button {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                } label: {
+                    Label(horizontal ? "Needs Accessibility access to keep windows clear" : "", systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                .help("Open Accessibility settings")
+            }
             ForEach(tracker.apps) { app in
                 Tile(app: app, landed: app.id == tracker.landed, showName: horizontal)
                     .onTapGesture { onLand(app) }

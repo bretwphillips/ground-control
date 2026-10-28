@@ -26,9 +26,13 @@ open "build/Ground Control.app"
 ```
 
 On first launch, grant Accessibility access in System Settings → Privacy & Security.
-Ground Control needs it to move windows and to read Dock badges. The build is ad-hoc
-signed, so macOS asks for Accessibility access again after each rebuild: remove the
-old entry and add the new one.
+Ground Control needs it to move windows and to read Dock badges; until then the strip
+shows a warning that opens that pane.
+
+Run `scripts/make-cert.sh` once first: it adds a self-signed "Ground Control Dev"
+signing identity to your login keychain, and builds signed with it keep the
+Accessibility grant. Without it builds are ad-hoc signed and macOS forgets the grant
+on every rebuild (remove the old entry and add the new one).
 
 ## Settings
 

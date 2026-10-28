@@ -13,6 +13,8 @@ struct StripApp: Identifiable, Equatable {
 final class AppTracker: ObservableObject {
     @Published private(set) var apps: [StripApp] = []
     @Published private(set) var landed: String?
+    /// Without Accessibility access windows can't be moved and badges can't be read.
+    @Published private(set) var trusted = AXIsProcessTrusted()
 
     private let settings: Settings
     private var badges: [String: String] = [:]
@@ -60,6 +62,8 @@ final class AppTracker: ObservableObject {
     }
 
     private func pollBadges() {
+        let nowTrusted = AXIsProcessTrusted()
+        if nowTrusted != trusted { trusted = nowTrusted }
         let latest = DockBadges.read()
         guard latest != badges else { return }
         badges = latest

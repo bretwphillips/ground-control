@@ -33,6 +33,7 @@ final class StripController {
     private var revealed = false
     private var revealedForKeys = false
     private var flashUntil = Date.distantPast
+    private var hoverSince: Date?
     private var lastNear = Date.distantPast
 
     private(set) var gates: GateController!
@@ -144,7 +145,8 @@ final class StripController {
     /// Where landed apps go.
     func runway() -> CGRect? {
         guard let screen = NSScreen.screens.first else { return nil }
-        return reserves ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
+        let reserved = reserves || (settings.autoHide && permissions.accessibility && revealed)
+        return reserved ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
     }
 
     /// The strip's slice of the screen and the runway left over for the landed app.
@@ -194,11 +196,20 @@ final class StripController {
         // The strip plus the gap out to the screen's edge, the menu bar included.
         let zone = strip.union(screen.divided(atDistance: 1, from: settings.edge.rectEdge).slice).insetBy(dx: -2, dy: -2)
 
-        if atEdge || (revealed && zone.contains(mouse)) { lastNear = Date() }
-        let shouldReveal = atEdge || (revealed && Date().timeIntervalSince(lastNear) < 0.4)
+        // Auto-hidden, resting on where the strip lives brings it out too, since the apps there
+        // move aside for it. A short pause keeps passing over from setting it off.
+        let resting = settings.autoHide && permissions.accessibility && strip.contains(mouse)
+        hoverSince = resting ? hoverSince ?? Date() : nil
+        let hovered = hoverSince.map { Date().timeIntervalSince($0) > 0.15 } ?? false
+
+        if atEdge || hovered || (revealed && zone.contains(mouse)) { lastNear = Date() }
+        let shouldReveal = atEdge || hovered || (revealed && Date().timeIntervalSince(lastNear) < 0.4)
         guard shouldReveal != revealed else { return }
         revealed = shouldReveal
         tick()
+        // Brought out by the pointer, the strip takes its slice back and the open gate moves aside;
+        // when it goes, the gate takes the whole screen again.
+        if settings.autoHide { gates.refit() }
     }
 
     /// Keeps every window off the strip so nothing ends up underneath it.

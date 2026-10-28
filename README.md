@@ -18,7 +18,8 @@ need it, without swiping between desktops.
   edit or delete it. Apps in a gate leave the strip's app list.
 - **Shortcuts**: ⌃⌥1 to ⌃⌥9 open gates 1 to 9, ⌃⌥[ and ⌃⌥] step to the gate on either side
   (wrapping around), ⌃⌥Tab flips back to the gate before, and ⌃⌥` / ⌃⌥⇧` switch to the next or
-  previous app in the open gate. (⌃⌥ with the arrows is left to window snappers like Magnet.)
+  previous app in the open gate, and ⌃⌥\\ answers a fly-by (or the last app to call in the past
+  minute) without clicking. (⌃⌥ with the arrows is left to window snappers like Magnet.)
 - **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
   preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
   or ignore it and it goes away. Each app gets

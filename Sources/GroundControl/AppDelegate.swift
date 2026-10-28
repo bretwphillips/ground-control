@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let gates = self?.gateStore.gates, index < gates.count else { return }
             strip?.gates.open(gates[index])
         }
+        hotKeys.onPreviousGate = { [weak strip] in strip?.gates.openPrevious() }
         let flyBy = FlyBy(
             settings: settings,
             permissions: permissions,

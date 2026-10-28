@@ -331,7 +331,6 @@ final class GateEditorModel: ObservableObject {
     /// The runway's size, which the layout's ratios divide.
     private let canvas: CGSize
 
-    private static let minimumsKey = "windowMinimums"
     /// Space between a window and its zone's edge while editing.
     static let gap: CGFloat = 6
     /// The app just dropped, which leaves again if its window turns out not to fit.
@@ -355,8 +354,7 @@ final class GateEditorModel: ObservableObject {
         self.name = name
         self.layout = layout
         self.canvas = canvas
-        let saved = UserDefaults.standard.dictionary(forKey: Self.minimumsKey) as? [String: [Double]] ?? [:]
-        minimums = saved.compactMapValues { $0.count == 2 ? CGSize(width: $0[0], height: $0[1]) : nil }
+        minimums = WindowMinimums.load()
             // Bigger than the whole runway was learned from an app that ignores resizing.
             .filter { $0.value.width < canvas.width && $0.value.height < canvas.height }
     }
@@ -389,7 +387,7 @@ final class GateEditorModel: ObservableObject {
         let updated = CGSize(width: max(known.width, width ?? 0), height: max(known.height, height ?? 0))
         guard updated != known else { return }
         minimums[id] = updated
-        UserDefaults.standard.set(minimums.mapValues { [$0.width, $0.height] }, forKey: Self.minimumsKey)
+        WindowMinimums.save(minimums)
         guard let layout else { return }
         let fitted = fit(layout, in: canvas)
         if fits(fitted, in: canvas) {

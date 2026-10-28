@@ -63,6 +63,17 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Gates") {
+                Toggle("Grow the app you're using", isOn: $settings.squish)
+                if settings.squish {
+                    Stepper("Grows by \(Int(settings.squishAmount * 100))%", value: $settings.squishAmount, in: 0.1...0.6, step: 0.05)
+                }
+                Toggle("Open an app's gate when you switch to it", isOn: $settings.autoOpen)
+                Text("⌃⌥1 to ⌃⌥9 open gates; ⌃⌥Tab flips back to the one before. Moving and resizing windows uses Accessibility.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Fly-by") {
                 Toggle("Fly-by when an app's badge shows a number", isOn: $settings.flyBy)
                 if settings.flyBy {

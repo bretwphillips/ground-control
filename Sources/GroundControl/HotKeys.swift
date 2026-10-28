@@ -1,8 +1,12 @@
 import Carbon
 
-/// ⌃⌥1 to ⌃⌥9 open gates 1 to 9. Carbon hot keys need no permission.
+/// ⌃⌥1 to ⌃⌥9 open gates 1 to 9 and ⌃⌥Tab flips back to the previous one. Carbon hot keys need
+/// no permission.
 final class HotKeys {
     var onGate: ((Int) -> Void)?
+    var onPreviousGate: (() -> Void)?
+
+    private static let previous: UInt32 = 100
 
     private var refs: [EventHotKeyRef] = []
     private var handler: EventHandlerRef?
@@ -16,7 +20,12 @@ final class HotKeys {
                 event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                 nil, MemoryLayout<EventHotKeyID>.size, nil, &id
             )
-            Unmanaged<HotKeys>.fromOpaque(context).takeUnretainedValue().onGate?(Int(id.id))
+            let keys = Unmanaged<HotKeys>.fromOpaque(context).takeUnretainedValue()
+            if id.id == HotKeys.previous {
+                keys.onPreviousGate?()
+            } else {
+                keys.onGate?(Int(id.id))
+            }
             return noErr
         }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
 
@@ -27,5 +36,9 @@ final class HotKeys {
             RegisterEventHotKey(UInt32(key), UInt32(controlKey | optionKey), id, GetApplicationEventTarget(), 0, &ref)
             if let ref { refs.append(ref) }
         }
+        var ref: EventHotKeyRef?
+        let id = EventHotKeyID(signature: OSType(0x4743_5452), id: Self.previous)
+        RegisterEventHotKey(UInt32(kVK_Tab), UInt32(controlKey | optionKey), id, GetApplicationEventTarget(), 0, &ref)
+        if let ref { refs.append(ref) }
     }
 }

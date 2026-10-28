@@ -16,7 +16,7 @@ struct StripView: View {
 
         ScrollView(horizontal ? .horizontal : .vertical, showsIndicators: false) {
             layout {
-                ForEach(Array(gates.gates.enumerated()), id: \.element.id) { index, gate in
+                ForEach(Array((gates.editing ? [] : gates.gates).enumerated()), id: \.element.id) { index, gate in
                     GateTile(
                         gate: gate,
                         apps: apps,
@@ -32,13 +32,16 @@ struct StripView: View {
                     }
                     .help(index < 9 ? "\(gate.name)  ⌃⌥\(index + 1)" : gate.name)
                 }
-                SaveGateTile(size: settings.size)
-                    .onTapGesture { gateController.newGate() }
-                    .help("New gate")
-                if !gates.gates.isEmpty {
+                if !gates.editing {
+                    SaveGateTile(size: settings.size)
+                        .onTapGesture { gateController.newGate() }
+                        .help("New gate")
+                }
+                if !gates.gates.isEmpty, !gates.editing {
                     Divider().frame(width: horizontal ? nil : 40, height: horizontal ? 24 : nil)
                 }
-                ForEach(tracker.apps.filter { !gated.contains($0.id) }) { app in
+                // While a gate is being built every app is offered, including ones in other gates.
+                ForEach(tracker.apps.filter { gates.editing || !gated.contains($0.id) }) { app in
                     Tile(
                         app: app,
                         size: settings.size,

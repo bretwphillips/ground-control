@@ -8,12 +8,14 @@ need it, without swiping between desktops.
 
 - **The pattern**: the strip along one edge (top by default) where apps wait, with their Dock badges.
 - **Landing**: click an app in the strip and it comes forward, filling the screen beside the strip.
-- **Gate**: a saved tiling of apps. Click **+** in the strip (or New Gate… in the menu) to
-  open an empty gate, then drag apps in from the editor's app row or from the strip. Dropping
-  on an edge of an app splits it that way, so columns and rows nest into any pattern; drag the
-  borders to resize, and × removes an app. Clicking a gate, or pressing ⌃⌥1 to ⌃⌥9, puts each
-  app's window in its spot beside the strip and brings them forward, launching any that aren't
-  running. Right-click a gate to edit or delete it. Apps in a gate leave the strip's app list.
+- **Gate**: a saved tiling of apps, built in place. Click **+** in the strip (or New Gate… in
+  the menu): other apps hide, and a see-through overlay covers the space beside the strip.
+  Drag apps in from the strip (it lists every app while you build); dropping on an edge of an
+  app splits it that way, so columns and rows nest into any pattern. Drag the borders to
+  resize, and × removes an app. With Accessibility each app's real window follows its zone as
+  you go; Cancel puts them back. Clicking a gate, or pressing ⌃⌥1 to ⌃⌥9, puts each window in
+  its spot and brings them forward, launching any app that isn't running. Right-click a gate to
+  edit or delete it. Apps in a gate leave the strip's app list.
 - **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
   preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
   or ignore it and it goes away. Each app gets

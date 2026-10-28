@@ -89,6 +89,8 @@ final class GateStore: ObservableObject {
     @Published private(set) var gates: [Gate] = []
     /// The gate opened last, until another opens.
     @Published var current: UUID?
+    /// A gate is being built over the runway.
+    @Published var editing = false
 
     private let key = "gates.v2"
 
@@ -130,12 +132,13 @@ final class GateController {
     let store: GateStore
     private let permissions: Permissions
     private let runway: () -> CGRect?
-    private let editor = GateEditor()
+    private let editor: GateEditor
 
     init(store: GateStore, permissions: Permissions, runway: @escaping () -> CGRect?) {
         self.store = store
         self.permissions = permissions
         self.runway = runway
+        editor = GateEditor(permissions: permissions, store: store)
     }
 
     func open(_ gate: Gate) {
@@ -177,7 +180,7 @@ final class GateController {
 
     private func edit(id: UUID, name: String, layout: GateLayout?) {
         guard let runway = runway() else { return }
-        editor.open(id: id, name: name, layout: layout, aspect: runway.width / runway.height) { [weak self] saved in
+        editor.open(id: id, name: name, layout: layout, runway: runway) { [weak self] saved in
             self?.store.save(saved)
             self?.open(saved)
         }

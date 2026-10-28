@@ -12,6 +12,7 @@ final class GateEditor {
     private var cancellable: AnyCancellable?
     private var runway = CGRect.zero
     private var hiddenByUs: [NSRunningApplication] = []
+    private var previousFront: NSRunningApplication?
     /// Where each moved window started, so Cancel can put it back.
     private var homes: [String: (window: AXUIElement, frame: CGRect)] = [:]
     private var placed: Set<String> = []
@@ -28,13 +29,15 @@ final class GateEditor {
         self.runway = runway
         store.editing = true
 
-        // An empty desktop to build on: everything outside the gate steps aside.
+        // An empty desktop to build on. macOS ignores a background app asking to hide the active
+        // one, so Ground Control comes forward first; the gate's own apps reappear as they're placed.
         let own = Bundle.main.bundleIdentifier
-        let keep = Set(layout?.leaves ?? [])
+        previousFront = NSWorkspace.shared.frontmostApplication
         hiddenByUs = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && $0.bundleIdentifier != own && !keep.contains($0.bundleIdentifier ?? "") && !$0.isHidden
+            $0.activationPolicy == .regular && $0.bundleIdentifier != own && !$0.isHidden
         }
-        hiddenByUs.forEach { $0.hide() }
+        NSApp.activate()
+        NSApp.hideOtherApplications(nil)
 
         let model = GateEditorModel(name: name, layout: layout)
         let panel = OverlayPanel(frame: runway)
@@ -56,7 +59,9 @@ final class GateEditor {
         for (window, frame) in homes.values {
             WindowMover.setFrame(window, frame)
         }
+        let front = previousFront
         finish()
+        front?.activate()
     }
 
     private func finish() {
@@ -65,6 +70,7 @@ final class GateEditor {
         panel = nil
         hiddenByUs.forEach { $0.unhide() }
         hiddenByUs = []
+        previousFront = nil
         homes = [:]
         placed = []
         store.editing = false
@@ -95,11 +101,16 @@ final class GateEditor {
                 continue
             }
             if app.isHidden { app.unhide() }
-            guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else { continue }
+            guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
+                log.notice("editor: no window for \(id, privacy: .public)")
+                continue
+            }
             if homes[id] == nil, let home = WindowMover.frame(of: window) {
                 homes[id] = (window, home)
             }
             WindowMover.setFrame(window, frame)
+            let landed = WindowMover.frame(of: window).map { String(describing: $0) } ?? "?"
+            log.notice("editor: \(id, privacy: .public) to \(String(describing: frame), privacy: .public), now \(landed, privacy: .public)")
         }
         placed = ids
     }

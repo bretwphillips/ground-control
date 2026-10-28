@@ -12,6 +12,8 @@ struct StripApp: Identifiable, Equatable {
 /// The apps circling in the pattern: running, regular, not hidden.
 final class AppTracker: ObservableObject {
     @Published private(set) var apps: [StripApp] = []
+    /// Every running app, including ones hidden from the strip, for building gates.
+    @Published private(set) var allApps: [StripApp] = []
     @Published private(set) var landed: String?
     /// Apps whose badge just gained a mention, for as long as their fly-by lasts.
     @Published private(set) var calling: Set<String> = []
@@ -56,13 +58,14 @@ final class AppTracker: ObservableObject {
     func refresh() {
         let own = Bundle.main.bundleIdentifier
         landed = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        apps = NSWorkspace.shared.runningApplications
+        allApps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .compactMap { app in
-                guard let id = app.bundleIdentifier, id != own, !settings.hiddenApps.contains(id) else { return nil }
+                guard let id = app.bundleIdentifier, id != own else { return nil }
                 let pid = app.processIdentifier
                 return StripApp(id: id, name: app.localizedName ?? id, icon: app.icon ?? NSImage(), pid: pid, badge: badges[pid])
             }
+        apps = allApps.filter { !settings.hiddenApps.contains($0.id) }
     }
 
     func call(_ app: StripApp, preview: Bool = false) {

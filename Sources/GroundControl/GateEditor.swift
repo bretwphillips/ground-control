@@ -18,8 +18,6 @@ final class GateEditor {
     private var placed: Set<String> = []
     /// Apps asked to open a window this session, so they're only asked once.
     private var opened: Set<String> = []
-    /// Apps whose window was fetched from another desktop this session.
-    private var broughtHere: Set<String> = []
     /// Finder windows minimized for the empty desktop, restored after.
     private var finderWindows: [AXUIElement] = []
     private var applyPending = false
@@ -123,7 +121,6 @@ final class GateEditor {
         homes = [:]
         placed = []
         opened = []
-        broughtHere = []
         store.editing = false
     }
 
@@ -179,12 +176,8 @@ final class GateEditor {
             if wasHidden {
                 applyAgain(after: 0.4)
             } else if !WindowMover.isOnThisDesktop(app.processIdentifier) {
-                if broughtHere.contains(id) {
-                    // Minimizing and restoring didn't bring it over; only the user can move it.
-                    model?.elsewhere.insert(id)
-                } else {
-                    bringHere(window, id)
-                }
+                // macOS gives apps no way to move a window between desktops; only the user can.
+                model?.elsewhere.insert(id)
                 continue
             }
             model?.elsewhere.remove(id)
@@ -234,19 +227,6 @@ final class GateEditor {
             }
         }
         placed = ids
-    }
-
-    /// A window on another desktop can be moved but stays there. Minimizing it and bringing it back
-    /// returns it on the desktop in view.
-    private func bringHere(_ window: AXUIElement, _ id: String) {
-        guard !broughtHere.contains(id) else { return }
-        broughtHere.insert(id)
-        log.notice("editor: \(id, privacy: .public) is on another desktop, bringing it here")
-        AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
-            self?.applyAgain(after: 0.6)
-        }
     }
 
     private func applyAgain(after delay: Double) {

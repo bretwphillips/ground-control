@@ -12,7 +12,7 @@ struct StripView: View {
         let horizontal = settings.edge.isHorizontal
         let layout = horizontal ? AnyLayout(HStackLayout(spacing: 6)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
         let gated = gates.bundleIDs
-        let apps = Dictionary(tracker.apps.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let apps = Dictionary(tracker.allApps.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         ScrollView(horizontal ? .horizontal : .vertical, showsIndicators: false) {
             layout {
@@ -20,6 +20,7 @@ struct StripView: View {
                     GateTile(
                         gate: gate,
                         apps: apps,
+                        previews: previews.images,
                         size: settings.size,
                         current: gate.id == gates.current,
                         calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
@@ -70,6 +71,7 @@ struct StripView: View {
 private struct GateTile: View {
     let gate: Gate
     let apps: [String: StripApp]
+    let previews: [pid_t: NSImage]
     let size: StripSize
     let current: Bool
     let calling: Bool
@@ -123,12 +125,18 @@ private struct GateTile: View {
                 RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.08))
                 ForEach(gate.layout.frames(in: CGRect(origin: .zero, size: proxy.size)), id: \.id) { spot in
                     let frame = spot.frame.insetBy(dx: 1, dy: 1)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(.background)
-                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(.secondary.opacity(0.5), lineWidth: 0.5))
-                        .overlay { AppIcon(bundleID: spot.id, side: min(22, frame.height * 0.6)) }
-                        .frame(width: frame.width, height: frame.height)
-                        .offset(x: frame.minX, y: frame.minY)
+                    Group {
+                        if let pid = apps[spot.id]?.pid, let image = previews[pid] {
+                            Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            Color.clear.overlay { AppIcon(bundleID: spot.id, side: min(22, frame.height * 0.6)) }
+                        }
+                    }
+                    .frame(width: frame.width, height: frame.height)
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(.secondary.opacity(0.5), lineWidth: 0.5))
+                    .offset(x: frame.minX, y: frame.minY)
                 }
             }
         }

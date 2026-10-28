@@ -301,23 +301,38 @@ private struct Tile: View {
     }
 }
 
-/// The app's badge in the colour of how much it wants attention.
+/// The app's badge, coloured by how much it wants attention and shaped by it too, so the levels
+/// read without colour: urgent carries "!", mentions a number, the rest a dot (✓ when finished).
 struct Badge: View {
     let app: StripApp?
     var size: CGFloat = 8
 
     var body: some View {
         if let app, let attention = app.attention {
-            if let badge = app.badge, badge != "•" {
-                Text(badge)
-                    .font(.system(size: size, weight: .bold))
+            let number = app.badge.map(Badges.mentions) ?? 0
+            switch attention {
+            case .urgent:
+                label(number > 0 ? "!\(app.badge ?? "")" : "!", attention.color)
+            case .mention:
+                label(app.badge ?? "", attention.color)
+            case .finished:
+                Image(systemName: "checkmark")
+                    .font(.system(size: size * 0.75, weight: .heavy))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, size * 0.4)
-                    .background(Capsule().fill(attention.color))
-            } else {
+                    .frame(width: size * 1.3, height: size * 1.3)
+                    .background(Circle().fill(attention.color))
+            case .unread:
                 Circle().fill(attention.color).frame(width: size * 0.75, height: size * 0.75)
             }
         }
+    }
+
+    private func label(_ text: String, _ color: Color) -> some View {
+        Text(text)
+            .font(.system(size: size, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, size * 0.4)
+            .background(Capsule().fill(color))
     }
 }
 

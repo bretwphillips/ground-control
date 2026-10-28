@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// Floating handles over the seams of the open gate. Dragging one moves the border between the two
-/// apps beside it; the handle overlaps both windows' edges so neither can be resized alone there.
+/// The open gate's frame: floating handles over its seams (dragging one moves the border between
+/// the two apps beside it), guards on its outer edges, and the tray behind it. Handles and guards
+/// overlap the windows' edges, so no window can be resized on its own while the gate is open.
 final class SeamHandles {
     private var panels: [SeamPanel] = []
+    private var locks: [NSPanel] = []
+    private let tray = TrayPanel()
     private let drag: (Seam, CGPoint) -> Void
     private let end: () -> Void
 
@@ -13,8 +16,29 @@ final class SeamHandles {
         self.end = end
     }
 
-    /// `seams` are in AX coordinates. Panels are reused so a drag in progress keeps its handle.
-    func show(_ seams: [Seam]) {
+    /// Everything is in AX coordinates.
+    func show(_ seams: [Seam], gap: CGFloat, locks frames: [CGRect], tray area: CGRect?) {
+        move(seams, gap: gap)
+        while locks.count > frames.count {
+            locks.removeLast().orderOut(nil)
+        }
+        while locks.count < frames.count {
+            locks.append(Self.lock())
+        }
+        for (lock, frame) in zip(locks, frames) {
+            lock.setFrame(WindowMover.appKitFrame(frame), display: false)
+            lock.orderFrontRegardless()
+        }
+        if let area, gap > 0 {
+            tray.setFrame(WindowMover.appKitFrame(area), display: true)
+            tray.orderFrontRegardless()
+        } else {
+            tray.orderOut(nil)
+        }
+    }
+
+    /// Panels are reused so a drag in progress keeps its handle.
+    func move(_ seams: [Seam], gap: CGFloat) {
         while panels.count > seams.count {
             panels.removeLast().orderOut(nil)
         }
@@ -23,10 +47,41 @@ final class SeamHandles {
         }
         for (panel, seam) in zip(panels, seams) {
             panel.seam = seam
-            panel.setFrame(WindowMover.appKitFrame(seam.handle), display: true)
+            panel.setFrame(WindowMover.appKitFrame(seam.handle(gap: gap)), display: true)
             panel.orderFrontRegardless()
         }
     }
+
+    /// An invisible strip that takes the clicks meant for a window's outer edge.
+    private static func lock() -> NSPanel {
+        let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.hidesOnDeactivate = false
+        panel.contentView = FirstClickHostingView(rootView: Color.black.opacity(0.001))
+        return panel
+    }
+}
+
+/// Sits behind every window, just above the desktop, in the strip's material, so the gate's apps
+/// look held in a tray. It never takes clicks.
+private final class TrayPanel: NSPanel {
+    init() {
+        super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+        collectionBehavior = [.canJoinAllSpaces, .stationary]
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        hidesOnDeactivate = false
+        ignoresMouseEvents = true
+        contentView = NSHostingView(rootView: Rectangle().fill(.regularMaterial))
+    }
+
+    override var canBecomeKey: Bool { false }
 }
 
 private final class SeamPanel: NSPanel {

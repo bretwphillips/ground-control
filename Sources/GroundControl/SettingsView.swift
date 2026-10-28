@@ -75,6 +75,7 @@ struct SettingsView: View {
                 if settings.squish {
                     Stepper("Grows by \(Int(settings.squishAmount * 100))%", value: $settings.squishAmount, in: 0.1...0.6, step: 0.05)
                 }
+                Stepper(settings.gateGap == 0 ? "No space between apps" : "\(Int(settings.gateGap))pt between apps", value: $settings.gateGap, in: 0...16, step: 2)
                 Toggle("Open an app's gate when you switch to it", isOn: $settings.autoOpen)
                 Picker("Swipe to switch gates", selection: $settings.swipeFingers) {
                     Text("Off").tag(0)

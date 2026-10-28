@@ -178,12 +178,13 @@ struct Seam: Equatable {
     let area: CGRect
     let offset: Double
 
-    /// The handle: 12pt across the border, overlapping both windows' edges so a drag there can't
-    /// catch one window's edge and resize it alone.
-    var handle: CGRect {
-        axis == .columns
-            ? CGRect(x: area.minX + offset * area.width - 6, y: area.minY, width: 12, height: area.height)
-            : CGRect(x: area.minX, y: area.minY + offset * area.height - 6, width: area.width, height: 12)
+    /// The handle: across the gap and 6pt into both windows' edges, so a drag there can't catch
+    /// one window's edge and resize it alone.
+    func handle(gap: CGFloat) -> CGRect {
+        let width = gap + 12
+        return axis == .columns
+            ? CGRect(x: area.minX + offset * area.width - width / 2, y: area.minY, width: width, height: area.height)
+            : CGRect(x: area.minX, y: area.minY + offset * area.height - width / 2, width: area.width, height: width)
     }
 }
 
@@ -287,18 +288,36 @@ final class GateController {
         )
     }
 
-    /// Shows handles on the open gate's seams while its windows are where the gate put them and
-    /// one of its apps is in front.
+    private var gap: CGFloat { CGFloat(settings.gateGap) }
+
+    /// Where each window goes: its share of the runway, with `gap` around and between them so the
+    /// tray behind shows through.
+    private func windowFrames(_ layout: GateLayout, in runway: CGRect) -> [(id: String, frame: CGRect)] {
+        layout.frames(in: runway.insetBy(dx: gap / 2, dy: gap / 2)).map { (id: $0.id, frame: $0.frame.insetBy(dx: gap / 2, dy: gap / 2)) }
+    }
+
+    /// While a gate is open: the tray behind it, and, while one of its apps is in front, handles on
+    /// its seams and guards on its outer edges, so windows are only resized together.
     func refreshSeams() {
         guard dragBase == nil else { return }
-        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         guard permissions.accessibility, !store.editing, store.current != nil, let shown,
-              let runway = runway().map(WindowMover.axFrame),
-              let front, shown.leaves.contains(front) else {
-            seams.show([])
+              let runway = runway().map(WindowMover.axFrame) else {
+            seams.show([], gap: gap, locks: [], tray: nil)
             return
         }
-        seams.show(shown.seams(in: runway))
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        guard let front, shown.leaves.contains(front) else {
+            seams.show([], gap: gap, locks: [], tray: runway)
+            return
+        }
+        let edge = gap + 6
+        let locks = [
+            CGRect(x: runway.minX, y: runway.minY, width: edge, height: runway.height),
+            CGRect(x: runway.maxX - edge, y: runway.minY, width: edge, height: runway.height),
+            CGRect(x: runway.minX, y: runway.minY, width: runway.width, height: edge),
+            CGRect(x: runway.minX, y: runway.maxY - edge, width: runway.width, height: edge),
+        ]
+        seams.show(shown.seams(in: runway.insetBy(dx: gap / 2, dy: gap / 2)), gap: gap, locks: locks, tray: runway)
     }
 
     /// Moves a seam to the pointer, resizing the windows on both sides together.
@@ -318,7 +337,7 @@ final class GateController {
         updated[seam.index - 1] = min(max(position / length - before, floorA), pair - floorB)
         updated[seam.index] = pair - updated[seam.index - 1]
         self.shown = (dragBase ?? shown).settingRatios(updated, at: seam.path[...])
-        seams.show(self.shown?.seams(in: runway) ?? [])
+        seams.move(self.shown?.seams(in: runway.insetBy(dx: gap / 2, dy: gap / 2)) ?? [], gap: gap)
 
         // Windows follow at most every 50ms; some apps redraw slowly.
         guard !dragPending else { return }
@@ -326,7 +345,7 @@ final class GateController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             guard let self, let layout = self.shown else { return }
             dragPending = false
-            for (id, frame) in layout.frames(in: runway) {
+            for (id, frame) in windowFrames(layout, in: runway) {
                 place(id, in: frame, attempts: 1)
             }
         }
@@ -364,7 +383,7 @@ final class GateController {
             guard settings.squish, let runway = runway().map(WindowMover.axFrame) else { return }
             shown = layout(of: current, focus: front, in: runway)
             focus = front
-            for (id, frame) in shown?.frames(in: runway) ?? [] {
+            for (id, frame) in shown.map({ windowFrames($0, in: runway) }) ?? [] {
                 place(id, in: frame, attempts: 1)
             }
             refreshSeams()
@@ -417,7 +436,7 @@ final class GateController {
         let focus = leaves.first { $0 == wanted } ?? leaves.first { $0 == front } ?? leaves.first
         shown = layout(of: gate, focus: focus, in: runway)
         self.focus = focus
-        let frames = shown?.frames(in: runway) ?? []
+        let frames = shown.map { windowFrames($0, in: runway) } ?? []
         var order = frames.filter { $0.id != focus }
         order += frames.filter { $0.id == focus }
 

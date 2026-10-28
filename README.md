@@ -21,10 +21,16 @@ need it, without swiping between desktops.
   ⌃⌥Tab goes back to the last gate, ⌃⌥N / ⌃⌥⇧N switch to the next or previous app in the open
   gate, and ⌃⌥M answers a fly-by (or the last app to call in the past minute). The defaults keep
   clear of the ⌃⌥ keys window snappers like Magnet use.
-- **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
-  preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
-  or ignore it and it goes away. Each app gets
-  at most one a minute.
+- **Fly-by**: when something needs you, its tile pulses and a live preview of its window floats
+  in a corner for a few seconds without taking focus. Click it (or press ⌃⌥M) to open the app's
+  gate, or ignore it and it goes away. What counts is a setting: every notification, mentions,
+  DMs and urgent ones (the default), or only urgent ones. Urgent means a notification mentions
+  one of your urgent words or people; Ground Control reads banners through Accessibility to tell.
+  A terminal that was busy for 20 seconds and goes still (Claude finishing a task) flies by too.
+- **Holding pattern**: fly-bys wait while you're focused (two minutes in one app, typing) and
+  during calls (microphone or camera on), and come through at the next break or after a few
+  minutes. Urgent ones never wait. A gate can be set to open for calls; the one from before comes
+  back after.
 
 Chat apps generally show `•` for plain unreads and a number for mentions and DMs,
 so only numbers start a fly-by.

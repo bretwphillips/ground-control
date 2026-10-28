@@ -16,6 +16,18 @@ enum StripEdge: String, CaseIterable {
     }
 }
 
+enum FlyByTrigger: String, CaseIterable {
+    case everything, mentions, urgent
+
+    var title: String {
+        switch self {
+        case .everything: "Every notification"
+        case .mentions: "Mentions, DMs and urgent"
+        case .urgent: "Only urgent"
+        }
+    }
+}
+
 enum StripSize: String, CaseIterable {
     case icons, names, large
 
@@ -55,6 +67,37 @@ final class Settings: ObservableObject {
     @Published var flyBySeconds: Double {
         didSet { defaults.set(flyBySeconds, forKey: "flyBySeconds") }
     }
+    @Published var flyByTrigger: FlyByTrigger {
+        didSet { defaults.set(flyByTrigger.rawValue, forKey: "flyByTrigger") }
+    }
+    /// Comma-separated words and names that make a notification urgent.
+    @Published var urgentWords: String {
+        didSet { defaults.set(urgentWords, forKey: "urgentWords") }
+    }
+    @Published var terminalFinished: Bool {
+        didSet { defaults.set(terminalFinished, forKey: "terminalFinished") }
+    }
+    @Published var holdWhileFocused: Bool {
+        didSet { defaults.set(holdWhileFocused, forKey: "holdWhileFocused") }
+    }
+    /// The longest a fly-by waits for a break, in minutes.
+    @Published var holdMinutes: Double {
+        didSet { defaults.set(holdMinutes, forKey: "holdMinutes") }
+    }
+    @Published var meetingMode: Bool {
+        didSet { defaults.set(meetingMode, forKey: "meetingMode") }
+    }
+    /// The gate to open while a call is on, if any.
+    @Published var meetingGate: String {
+        didSet { defaults.set(meetingGate, forKey: "meetingGate") }
+    }
+
+    func isUrgent(_ text: String) -> Bool {
+        urgentWords.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .contains { !$0.isEmpty && text.localizedCaseInsensitiveContains($0) }
+    }
+
     /// The focused app in the open gate grows, its neighbours give way.
     @Published var squish: Bool {
         didSet { defaults.set(squish, forKey: "squish") }
@@ -100,6 +143,13 @@ final class Settings: ObservableObject {
         flyBy = defaults.object(forKey: "flyBy") as? Bool ?? true
         flyByPreview = defaults.object(forKey: "flyByPreview") as? Bool ?? true
         flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5
+        flyByTrigger = FlyByTrigger(rawValue: defaults.string(forKey: "flyByTrigger") ?? "") ?? .mentions
+        urgentWords = defaults.string(forKey: "urgentWords") ?? "urgent, asap, prod, outage"
+        terminalFinished = defaults.object(forKey: "terminalFinished") as? Bool ?? true
+        holdWhileFocused = defaults.object(forKey: "holdWhileFocused") as? Bool ?? true
+        holdMinutes = defaults.object(forKey: "holdMinutes") as? Double ?? 3
+        meetingMode = defaults.object(forKey: "meetingMode") as? Bool ?? true
+        meetingGate = defaults.string(forKey: "meetingGate") ?? ""
         squish = defaults.object(forKey: "squish") as? Bool ?? true
         squishAmount = defaults.object(forKey: "squishAmount") as? Double ?? 0.25
         autoOpen = defaults.object(forKey: "autoOpen") as? Bool ?? false

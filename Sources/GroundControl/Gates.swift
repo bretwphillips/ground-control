@@ -239,6 +239,14 @@ final class GateStore: ObservableObject {
         persist()
     }
 
+    /// Moves a gate to where another one is, shifting the rest along.
+    func move(_ id: UUID, to target: UUID) {
+        guard let from = gates.firstIndex(where: { $0.id == id }),
+              let to = gates.firstIndex(where: { $0.id == target }), from != to else { return }
+        gates.insert(gates.remove(at: from), at: to)
+        persist()
+    }
+
     func delete(_ id: UUID) {
         gates.removeAll { $0.id == id }
         if current == id { current = nil }

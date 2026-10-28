@@ -68,6 +68,19 @@ enum WindowMover {
         }
     }
 
+    /// Whether the app has a real window on some desktop other than the one in view.
+    static func hasWindowElsewhere(_ pid: pid_t) -> Bool {
+        guard !isOnThisDesktop(pid),
+              let windows = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        return windows.contains { window in
+            window[kCGWindowOwnerPID as String] as? pid_t == pid
+                && window[kCGWindowLayer as String] as? Int == 0
+                && ((window[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) }?.height ?? 0) > 100
+        }
+    }
+
     /// AppKit measures from the bottom-left of the primary screen, AX from its top-left.
     static func axFrame(_ frame: CGRect) -> CGRect {
         CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height)

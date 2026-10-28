@@ -142,7 +142,8 @@ final class GateEditor {
     private func apply(_ layout: GateLayout?) {
         guard panel != nil else { return }
         // A small gap between windows keeps the borders between them easy to grab.
-        let frames = (layout?.frames(in: WindowMover.axFrame(runway)) ?? []).map { (id: $0.id, frame: $0.frame.insetBy(dx: 6, dy: 6)) }
+        let gap = GateEditorModel.gap
+        let frames = (layout?.frames(in: WindowMover.axFrame(runway)) ?? []).map { (id: $0.id, frame: $0.frame.insetBy(dx: gap, dy: gap)) }
         let ids = Set(frames.map(\.id))
         for id in placed.subtracting(ids) {
             running(id).map(hide)
@@ -155,9 +156,14 @@ final class GateEditor {
             let wasHidden = app.isHidden
             show(app)
             guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
-                // Running with every window closed, like Calendar after ⌘W.
-                log.notice("editor: no window for \(id, privacy: .public)")
-                openWindow(id)
+                if permissions.accessibility, WindowMover.hasWindowElsewhere(app.processIdentifier) {
+                    // Accessibility only sees windows on the desktop in view.
+                    model?.elsewhere.insert(id)
+                } else {
+                    // Running with every window closed, like Calendar after ⌘W.
+                    log.notice("editor: no window for \(id, privacy: .public)")
+                    openWindow(id)
+                }
                 continue
             }
             // A full-screen window is a desktop of its own and won't take a zone until it leaves.
@@ -344,13 +350,18 @@ final class GateEditorModel: ObservableObject {
     private let canvas: CGSize
 
     private static let minimumsKey = "windowMinimums"
+    /// Space between a window and its zone's edge while editing.
+    static let gap: CGFloat = 6
+    /// The app just dropped, which leaves again if its window turns out not to fit.
+    private var lastDrop: (id: String, at: Date)?
 
     /// The smallest a part of the layout can be along `axis`, from what its windows have allowed.
     func minimum(of node: GateLayout, along axis: GateLayout.Axis) -> CGFloat {
         switch node {
         case .app(let id):
             let size = minimums[id] ?? .zero
-            return axis == .columns ? size.width : size.height
+            let needed = axis == .columns ? size.width : size.height
+            return needed > 0 ? needed + GateEditorModel.gap * 2 : 0
         case .split(let splitAxis, let children, _):
             let parts = children.map { minimum(of: $0, along: axis) }
             // Side by side the minimums add up; stacked across, the widest one decides.
@@ -376,6 +387,7 @@ final class GateEditorModel: ObservableObject {
             return
         }
         layout = candidate
+        lastDrop = (id, Date())
     }
 
     /// Whether dropping `id` there would leave every window enough room, as far as is known.
@@ -400,11 +412,15 @@ final class GateEditorModel: ObservableObject {
         let fitted = fit(layout, in: canvas)
         if fits(fitted, in: canvas) {
             self.layout = fitted
-        } else {
-            // Only found out once its window refused; it leaves the gate instead of spilling over.
+        } else if let drop = lastDrop, drop.id == id, Date().timeIntervalSince(drop.at) < 3 {
+            // Just dropped, and only found out once its window refused: it leaves the gate
+            // instead of spilling over.
             self.layout = fit(layout.removing(id) ?? layout, in: canvas)
             tooSmall[id] = nil
             turnAway(id)
+        } else {
+            // Already in the gate: make what room there is rather than throw it out.
+            self.layout = fitted
         }
     }
 
@@ -422,7 +438,7 @@ final class GateEditorModel: ObservableObject {
         switch node {
         case .app(let id):
             let needed = minimums[id] ?? .zero
-            return needed.width <= size.width + 1 && needed.height <= size.height + 1
+            return needed.width + Self.gap * 2 <= size.width + 1 && needed.height + Self.gap * 2 <= size.height + 1
         case .split(let axis, let children, let ratios):
             return children.indices.allSatisfy { index in
                 fits(children[index], in: axis == .columns

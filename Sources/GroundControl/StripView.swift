@@ -75,6 +75,11 @@ struct StripView: View {
                     }
                     .help(app.name)
                 }
+                if !gates.editing {
+                    DesktopTile(size: settings.size)
+                        .onTapGesture { gateController.desktop.toggle() }
+                        .help("Show the desktop (\(settings.shortcut(for: .desktop).display))")
+                }
             }
             .padding(5)
         }
@@ -197,6 +202,18 @@ private struct SuggestionTile: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: accept)
         .help("You switch between these two a lot. Click to make them a gate, side by side.")
+    }
+}
+
+private struct DesktopTile: View {
+    let size: StripSize
+
+    var body: some View {
+        Image(systemName: "macwindow.on.rectangle")
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .frame(width: size == .large ? 40 : 24, height: size == .large ? 84 : 24)
+            .contentShape(Rectangle())
     }
 }
 

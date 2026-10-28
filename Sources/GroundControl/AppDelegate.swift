@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .named(.appNext): gates.stepApp(by: 1)
             case .named(.appPrevious): gates.stepApp(by: -1)
             case .named(.answer): self?.flyBy?.answer()
+            case .named(.desktop): gates.desktop.toggle()
             }
         }
         let flyBy = FlyBy(
@@ -80,6 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         newGate.target = self
         menu.addItem(newGate)
 
+        let desktop = NSMenuItem(title: "Show Desktop", action: #selector(showDesktop), keyEquivalent: "")
+        desktop.target = self
+        menu.addItem(desktop)
+
         let flights = NSMenu()
         for app in tracker?.apps ?? [] {
             let item = NSMenuItem(title: app.name, action: #selector(previewFlyBy(_:)), keyEquivalent: "")
@@ -110,6 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             beforeMeeting = nil
             gates.open(previous)
         }
+    }
+
+    @objc private func showDesktop() {
+        strip?.gates.desktop.toggle()
     }
 
     @objc private func showSettings() {

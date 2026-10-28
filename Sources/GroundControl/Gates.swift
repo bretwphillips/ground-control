@@ -269,6 +269,7 @@ final class GateController {
     private var reopened: Set<String> = []
 
     private let settings: Settings
+    let desktop = DesktopController()
     /// The open gate as it's laid out on screen right now, squish included.
     private(set) var shown: GateLayout?
     private var focus: String?
@@ -300,14 +301,15 @@ final class GateController {
     /// its seams and guards on its outer edges, so windows are only resized together.
     func refreshSeams() {
         guard dragBase == nil else { return }
-        guard permissions.accessibility, !store.editing, store.current != nil, let shown,
+        guard permissions.accessibility, !store.editing, !desktop.showing, store.current != nil, let shown,
               let runway = runway().map(WindowMover.axFrame) else {
             seams.show([], gap: gap, locks: [], tray: nil)
             return
         }
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        // Something else in front (Finder, for the desktop) gets the whole screen, tray included.
         guard let front, shown.leaves.contains(front) else {
-            seams.show([], gap: gap, locks: [], tray: runway)
+            seams.show([], gap: gap, locks: [], tray: nil)
             return
         }
         let edge = gap + 6
@@ -532,7 +534,8 @@ final class GateController {
     /// Lets go of the open gate once one of its windows leaves where it settled: moved, resized,
     /// minimized, hidden, full screen or closed. Clicking the gate puts it all back.
     func checkDrift() {
-        guard permissions.accessibility, dragBase == nil, let id = store.current, Date().timeIntervalSince(openedAt) > 3,
+        // Showing the desktop hides the gate's apps for a moment; that isn't them moving away.
+        guard permissions.accessibility, dragBase == nil, !desktop.showing, let id = store.current, Date().timeIntervalSince(openedAt) > 3,
               let gate = store.gates.first(where: { $0.id == id }) else { return }
         if settled.isEmpty {
             // Windows still nowhere to be seen by now (another desktop) don't count.

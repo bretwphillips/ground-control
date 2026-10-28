@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// What a tile under the pointer stands for.
-enum Peek: Equatable {
+enum Peek: Hashable {
     case app(String)
     case gate(UUID)
 }

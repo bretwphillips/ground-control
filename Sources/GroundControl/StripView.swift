@@ -7,6 +7,7 @@ struct StripView: View {
     @ObservedObject var gates: GateStore
     let gateController: GateController
     @ObservedObject var patterns: Patterns
+    @ObservedObject private var keys = KeyHints.shared
     let onLand: (StripApp) -> Void
     /// Where each tile sits in the strip's window, for finding the one under the pointer.
     let onTiles: ([Peek: CGRect]) -> Void
@@ -41,6 +42,11 @@ struct StripView: View {
                         Button("Delete Gate") { gates.delete(gate.id) }
                     }
                     .help(index < 9 ? "\(gate.name)  ⌃⌥\(index + 1)" : gate.name)
+                    .overlay(alignment: .topLeading) {
+                        if keys.showing, let text = gateKeys(index, gate) {
+                            KeyCap(text: text).offset(x: -3, y: -3)
+                        }
+                    }
                 }
                 if !gates.editing, let pair = patterns.suggestion {
                     SuggestionTile(pair: pair, size: settings.size) {
@@ -83,6 +89,11 @@ struct StripView: View {
                 }
                 if !gates.editing {
                     DesktopTile(size: settings.size)
+                        .overlay(alignment: .topLeading) {
+                            if keys.showing, let text = settings.hint(.desktop) {
+                                KeyCap(text: text).offset(x: -3, y: -3)
+                            }
+                        }
                         .onTapGesture { gateController.desktop.toggle() }
                         .help("Show the desktop (\(settings.shortcut(for: .desktop).display))")
                 }
@@ -92,6 +103,20 @@ struct StripView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
         .onPreferenceChange(TileFrames.self, perform: onTiles)
+    }
+
+    /// The keys that reach this gate with ⌃⌥ held: its number, and the step and back keys when it's
+    /// beside or before the open gate.
+    private func gateKeys(_ index: Int, _ gate: Gate) -> String? {
+        var parts: [String] = []
+        if index < 9 { parts.append("\(index + 1)") }
+        let all = gates.gates
+        if let current = all.firstIndex(where: { $0.id == gates.current }), all.count > 1, index != current {
+            if index == (current - 1 + all.count) % all.count, let key = settings.hint(.gateLeft) { parts.append(key) }
+            if index == (current + 1) % all.count, let key = settings.hint(.gateRight) { parts.append(key) }
+        }
+        if gate.id == gates.previous, gate.id != gates.current, let key = settings.hint(.back) { parts.append(key) }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 }
 

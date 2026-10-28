@@ -31,6 +31,7 @@ final class StripController {
     private var timer: Timer?
     private var pointerTimer: Timer?
     private var revealed = false
+    private var revealedForKeys = false
     private var lastNear = Date.distantPast
 
     private(set) var gates: GateController!
@@ -99,7 +100,18 @@ final class StripController {
         pointerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.trackPointer()
             self?.trackHover()
+            KeyHints.shared.poll()
         }
+        KeyHints.shared.$showing
+            .removeDuplicates()
+            .sink { [weak self] showing in
+                guard let self else { return }
+                // Holding ⌃⌥ reveals the strip too, so its keys can be seen.
+                revealedForKeys = showing
+                tick()
+                gates.showWindowHints(showing)
+            }
+            .store(in: &cancellables)
 
         place()
     }
@@ -133,7 +145,7 @@ final class StripController {
             // Full-screen windows can't be resized, so the strip steps aside on their desktops.
             shown = false
         } else {
-            shown = reserves || revealed || !tracker.calling.isEmpty || gates.store.editing
+            shown = reserves || revealed || revealedForKeys || !tracker.calling.isEmpty || gates.store.editing
         }
         if shown != panel.isVisible {
             shown ? panel.orderFrontRegardless() : panel.orderOut(nil)

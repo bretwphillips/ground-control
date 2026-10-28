@@ -283,6 +283,7 @@ final class GateController {
     private var focus: String?
     private var seams: SeamHandles!
     private var dragBase: GateLayout?
+    private let windowHints = WindowHints()
     private var dragPending = false
 
     init(store: GateStore, permissions: Permissions, settings: Settings, runway: @escaping () -> CGRect?) {
@@ -420,6 +421,29 @@ final class GateController {
         } else if settings.autoOpen, let gate = gate(for: front) {
             open(gate, focus: front)
         }
+    }
+
+    /// While ⌃⌥ is held: the next and previous app's keys over their windows in the open gate.
+    func showWindowHints(_ showing: Bool) {
+        guard showing, permissions.accessibility, !store.editing, let shown,
+              let runway = runway().map(WindowMover.axFrame) else {
+            windowHints.show([])
+            return
+        }
+        let frames = windowFrames(shown, in: runway)
+        let leaves = frames.map(\.id)
+        guard leaves.count > 1 else {
+            windowHints.show([])
+            return
+        }
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let from = leaves.firstIndex { $0 == front } ?? -1
+        let next = (from + 1) % leaves.count
+        let previous = (from - 1 + leaves.count) % leaves.count
+        var hints: [(frame: CGRect, text: String)] = []
+        if let key = settings.hint(.appNext) { hints.append((frames[next].frame, key)) }
+        if let key = settings.hint(.appPrevious), previous != next { hints.append((frames[previous].frame, key)) }
+        windowHints.show(hints)
     }
 
     /// Opens the gate `step` places along the strip from the open one, wrapping around the ends.

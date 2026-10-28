@@ -50,9 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        let saveGate = NSMenuItem(title: "Save Windows as Gate…", action: #selector(saveGate), keyEquivalent: "")
-        saveGate.target = self
-        menu.addItem(saveGate)
+        let newGate = NSMenuItem(title: "New Gate…", action: #selector(newGate), keyEquivalent: "")
+        newGate.target = self
+        menu.addItem(newGate)
 
         let flights = NSMenu()
         for app in tracker?.apps ?? [] {
@@ -69,8 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Quit Ground Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
-    @objc private func saveGate() {
-        strip?.gates.saveCurrent()
+    @objc private func newGate() {
+        strip?.gates.newGate()
     }
 
     @objc private func showSettings() {

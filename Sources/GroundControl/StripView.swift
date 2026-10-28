@@ -22,20 +22,19 @@ struct StripView: View {
                         apps: apps,
                         size: settings.size,
                         current: gate.id == gates.current,
-                        calling: gate.spots.contains { tracker.calling.contains($0.bundleID) }
+                        calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
                     )
                     .onTapGesture { gateController.open(gate) }
                     .contextMenu {
-                        Button("Update to Current Windows") { gateController.updateToCurrent(gate) }
-                        Button("Rename…") { gateController.rename(gate) }
+                        Button("Edit Gate…") { gateController.edit(gate) }
                         Divider()
                         Button("Delete Gate") { gates.delete(gate.id) }
                     }
                     .help(index < 9 ? "\(gate.name)  ⌃⌥\(index + 1)" : gate.name)
                 }
                 SaveGateTile(size: settings.size)
-                    .onTapGesture { gateController.saveCurrent() }
-                    .help("Save the windows showing now as a gate")
+                    .onTapGesture { gateController.newGate() }
+                    .help("New gate")
                 if !gates.gates.isEmpty {
                     Divider().frame(width: horizontal ? nil : 40, height: horizontal ? 24 : nil)
                 }
@@ -48,6 +47,7 @@ struct StripView: View {
                         calling: tracker.calling.contains(app.id)
                     )
                     .onTapGesture { onLand(app) }
+                    .onDrag { NSItemProvider(object: app.id as NSString) }
                     .contextMenu {
                         Button("Hide from Strip") { settings.hiddenApps.insert(app.id) }
                     }
@@ -103,24 +103,24 @@ private struct GateTile: View {
     /// The gate's apps, overlapping like a stack of boarding passes.
     private func icons(_ side: CGFloat) -> some View {
         HStack(spacing: -side * 0.35) {
-            ForEach(gate.spots.prefix(4), id: \.bundleID) { spot in
-                AppIcon(bundleID: spot.bundleID, side: side)
-                    .overlay(alignment: .topTrailing) { Badge(label: apps[spot.bundleID]?.badge).offset(x: 4, y: -4) }
+            ForEach(gate.layout.leaves.prefix(4), id: \.self) { id in
+                AppIcon(bundleID: id, side: side)
+                    .overlay(alignment: .topTrailing) { Badge(label: apps[id]?.badge).offset(x: 4, y: -4) }
             }
         }
     }
 
-    /// Where each window sits, drawn back to front.
+    /// Where each window sits.
     private var layoutMap: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.08))
-                ForEach(gate.spots.reversed(), id: \.bundleID) { spot in
-                    let frame = spot.frame(in: CGRect(origin: .zero, size: proxy.size))
+                ForEach(gate.layout.frames(in: CGRect(origin: .zero, size: proxy.size)), id: \.id) { spot in
+                    let frame = spot.frame.insetBy(dx: 1, dy: 1)
                     RoundedRectangle(cornerRadius: 3)
                         .fill(.background)
                         .overlay(RoundedRectangle(cornerRadius: 3).stroke(.secondary.opacity(0.5), lineWidth: 0.5))
-                        .overlay { AppIcon(bundleID: spot.bundleID, side: min(22, frame.height * 0.6)) }
+                        .overlay { AppIcon(bundleID: spot.id, side: min(22, frame.height * 0.6)) }
                         .frame(width: frame.width, height: frame.height)
                         .offset(x: frame.minX, y: frame.minY)
                 }
@@ -142,12 +142,17 @@ private struct SaveGateTile: View {
     }
 }
 
-private struct AppIcon: View {
+struct AppIcon: View {
     let bundleID: String
     let side: CGFloat
 
     var body: some View {
         Image(nsImage: Self.icon(bundleID)).resizable().frame(width: side, height: side)
+    }
+
+    static func name(_ bundleID: String) -> String {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundleID
     }
 
     private static var cache: [String: NSImage] = [:]

@@ -28,7 +28,16 @@ enum WindowMover {
 
     static func mainWindow(of pid: pid_t) -> AXUIElement? {
         let app = AXUIElementCreateApplication(pid)
-        return AX.value(app, kAXMainWindowAttribute) ?? standardWindows(of: pid).first
+        // The main window can be the one sitting minimized in the Dock.
+        if let main: AXUIElement = AX.value(app, kAXMainWindowAttribute), AX.value(main, kAXMinimizedAttribute) != true {
+            return main
+        }
+        return standardWindows(of: pid).first
+    }
+
+    static func minimizedWindow(of pid: pid_t) -> AXUIElement? {
+        let windows: [AXUIElement] = AX.value(AXUIElementCreateApplication(pid), kAXWindowsAttribute) ?? []
+        return windows.first { AX.value($0, kAXMinimizedAttribute) == true }
     }
 
     static func frontWindow() -> AXUIElement? {

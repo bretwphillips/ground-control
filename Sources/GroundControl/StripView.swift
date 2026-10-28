@@ -129,7 +129,7 @@ private struct GateTile: View {
         HStack(spacing: -side * 0.35) {
             ForEach(gate.layout.leaves.prefix(4), id: \.self) { id in
                 AppIcon(bundleID: id, side: side)
-                    .overlay(alignment: .topTrailing) { Badge(label: apps[id]?.badge).offset(x: 4, y: -4) }
+                    .overlay(alignment: .topTrailing) { Badge(app: apps[id]).offset(x: 4, y: -4) }
             }
         }
     }
@@ -266,10 +266,10 @@ private struct Tile: View {
     @ViewBuilder private var content: some View {
         switch size {
         case .icons:
-            icon(22).overlay(alignment: .topTrailing) { Badge(label: app.badge).offset(x: 6, y: -4) }
+            icon(22).overlay(alignment: .topTrailing) { Badge(app: app).offset(x: 6, y: -4) }
         case .names:
             HStack(spacing: 5) {
-                icon(20).overlay(alignment: .topTrailing) { Badge(label: app.badge).offset(x: 6, y: -4) }
+                icon(20).overlay(alignment: .topTrailing) { Badge(app: app).offset(x: 6, y: -4) }
                 Text(app.name).font(.system(size: 11)).lineLimit(1)
             }
             .frame(height: 24)
@@ -289,7 +289,7 @@ private struct Tile: View {
                     icon(14)
                     Text(app.name).font(.system(size: 11)).lineLimit(1)
                     Spacer(minLength: 0)
-                    Badge(label: app.badge)
+                    Badge(app: app)
                 }
                 .frame(width: 150)
             }
@@ -301,19 +301,21 @@ private struct Tile: View {
     }
 }
 
-private struct Badge: View {
-    let label: String?
+/// The app's badge in the colour of how much it wants attention.
+struct Badge: View {
+    let app: StripApp?
+    var size: CGFloat = 8
 
     var body: some View {
-        if let label {
-            if label == "•" {
-                Circle().fill(.red).frame(width: 6, height: 6)
-            } else {
-                Text(label)
-                    .font(.system(size: 8, weight: .bold))
+        if let app, let attention = app.attention {
+            if let badge = app.badge, badge != "•" {
+                Text(badge)
+                    .font(.system(size: size, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 3)
-                    .background(Capsule().fill(.red))
+                    .padding(.horizontal, size * 0.4)
+                    .background(Capsule().fill(attention.color))
+            } else {
+                Circle().fill(attention.color).frame(width: size * 0.75, height: size * 0.75)
             }
         }
     }

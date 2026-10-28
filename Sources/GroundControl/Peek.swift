@@ -88,7 +88,7 @@ private struct PeekView: View {
         VStack(spacing: 0) {
             switch model.peek {
             case .app(let id):
-                title(icon: AppIcon(bundleID: id, side: 18), name: apps[id]?.name ?? AppIcon.name(id), badge: apps[id]?.badge)
+                title(icon: AppIcon(bundleID: id, side: 18), name: apps[id]?.name ?? AppIcon.name(id), app: apps[id])
                 Group {
                     if let pid = apps[id]?.pid, let image = previews.images[pid] {
                         Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
@@ -100,7 +100,7 @@ private struct PeekView: View {
                 .padding(8)
             case .gate(let id):
                 if let gate = gates.gates.first(where: { $0.id == id }) {
-                    title(icon: Image(systemName: "airplane.arrival"), name: gate.name, badge: nil)
+                    title(icon: Image(systemName: "airplane.arrival"), name: gate.name, app: nil)
                     GateMap(gate: gate, apps: apps, previews: previews.images, iconSide: 40)
                         .padding(8)
                 }
@@ -114,19 +114,12 @@ private struct PeekView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.secondary.opacity(0.3), lineWidth: 0.5))
     }
 
-    private func title(icon: some View, name: String, badge: String?) -> some View {
+    private func title(icon: some View, name: String, app: StripApp?) -> some View {
         HStack(spacing: 6) {
             icon
             Text(name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
             Spacer()
-            if let badge, badge != "•" {
-                Text(badge)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(.red))
-            }
+            Badge(app: app, size: 11)
         }
         .padding(.horizontal, 12)
         .frame(height: Self.titleHeight)

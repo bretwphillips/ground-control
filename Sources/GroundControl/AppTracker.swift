@@ -1,5 +1,27 @@
 import AppKit
 import Combine
+import SwiftUI
+
+/// How much an app wants attention, from least to most.
+enum Attention: Comparable {
+    /// Its badge is the plain unread dot.
+    case unread
+    /// A terminal finished what it was doing.
+    case finished
+    /// Its badge is a number: mentions and DMs.
+    case mention
+    /// A notification matched an urgent word or person.
+    case urgent
+
+    var color: Color {
+        switch self {
+        case .unread: .blue
+        case .finished: .green
+        case .mention: .orange
+        case .urgent: .red
+        }
+    }
+}
 
 struct StripApp: Identifiable, Equatable {
     let id: String
@@ -7,6 +29,7 @@ struct StripApp: Identifiable, Equatable {
     let icon: NSImage
     let pid: pid_t
     var badge: String?
+    var attention: Attention?
 }
 
 /// The apps circling in the pattern: running, regular, not hidden.
@@ -22,6 +45,8 @@ final class AppTracker: ObservableObject {
 
     private let settings: Settings
     private var badges: [pid_t: String] = [:]
+    /// Urgent and finished marks, kept until the user switches to the app.
+    private var marks: [String: Attention] = [:]
     private var primed = false
     private var timer: Timer?
     private var observers: [NSObjectProtocol] = []
@@ -57,18 +82,28 @@ final class AppTracker: ObservableObject {
     func refresh() {
         let own = Bundle.main.bundleIdentifier
         landed = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        if let landed { marks[landed] = nil }
         allApps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .compactMap { app in
                 guard let id = app.bundleIdentifier, id != own else { return nil }
                 let pid = app.processIdentifier
-                return StripApp(id: id, name: app.localizedName ?? id, icon: app.icon ?? NSImage(), pid: pid, badge: badges[pid])
+                let badge = badges[pid]
+                let fromBadge: Attention? = badge.map { $0 == "•" ? .unread : .mention }
+                let attention = [marks[id], fromBadge].compactMap { $0 }.max()
+                return StripApp(id: id, name: app.localizedName ?? id, icon: app.icon ?? NSImage(), pid: pid, badge: badge, attention: attention)
             }
         apps = allApps.filter { !settings.hiddenApps.contains($0.id) }
     }
 
     func call(_ call: Call) {
         let id = call.app.id
+        if call.urgent {
+            marks[id] = .urgent
+        } else if call.kind == .finished, marks[id] == nil {
+            marks[id] = .finished
+        }
+        refresh()
         calling.insert(id)
         onCall?(call)
         DispatchQueue.main.asyncAfter(deadline: .now() + settings.flyBySeconds) { [weak self] in

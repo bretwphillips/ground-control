@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         hotKeys.onAction = { [weak self, weak strip] action in
             guard let gates = strip?.gates else { return }
+            if case .named(.answer) = action {} else if case .named(.desktop) = action {} else { strip?.flash() }
             switch action {
             case .gate(let index):
                 guard let all = self?.gateStore.gates, index < all.count else { return }
@@ -51,7 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previews.onFinished = { [weak tracker] pid in tracker?.finished(pid: pid) }
         meeting.onChange = { [weak self] live in self?.meetingChanged(live) }
         let swipes = SwipeWatcher.shared
-        swipes.onSwipe = { [weak strip] step in strip?.gates.step(by: step) }
+        swipes.onSwipe = { [weak strip] step in
+            strip?.gates.step(by: step)
+            strip?.flash()
+        }
         swipeFingers = settings.$swipeFingers.sink { fingers in
             swipes.fingers = fingers
             if fingers > 0 { swipes.start() }

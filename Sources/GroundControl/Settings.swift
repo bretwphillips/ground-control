@@ -55,6 +55,11 @@ final class Settings: ObservableObject {
     @Published var hiddenApps: Set<String> {
         didSet { defaults.set(Array(hiddenApps), forKey: "hiddenApps") }
     }
+    /// The strip stays out of sight until the pointer reaches its edge or a shortcut is used, and
+    /// apps get the whole screen.
+    @Published var autoHide: Bool {
+        didSet { defaults.set(autoHide, forKey: "autoHide") }
+    }
     @Published var keepClear: Bool {
         didSet { defaults.set(keepClear, forKey: "keepClear") }
     }
@@ -152,6 +157,7 @@ final class Settings: ObservableObject {
         size = StripSize(rawValue: defaults.string(forKey: "stripSize") ?? "") ?? .names
         hiddenApps = Set(defaults.stringArray(forKey: "hiddenApps") ?? [])
         keepClear = defaults.object(forKey: "keepClear") as? Bool ?? true
+        autoHide = defaults.object(forKey: "autoHide") as? Bool ?? false
         flyBy = defaults.object(forKey: "flyBy") as? Bool ?? true
         flyByPreview = defaults.object(forKey: "flyByPreview") as? Bool ?? true
         flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5

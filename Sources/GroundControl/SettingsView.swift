@@ -47,6 +47,12 @@ struct SettingsView: View {
                 Picker("Edge", selection: $settings.edge) {
                     ForEach(StripEdge.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                Toggle("Hide the strip until you need it", isOn: $settings.autoHide)
+                if settings.autoHide {
+                    Text("Apps and gates get the whole screen. The strip comes out when the pointer reaches its edge, while ⌃⌥ is held, for a moment after a gate shortcut or swipe, and during a fly-by.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Picker("Size", selection: $settings.size) {
                     ForEach(StripSize.allCases, id: \.self) { Text($0.title).tag($0) }
                 }

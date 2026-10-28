@@ -39,7 +39,7 @@ final class GateEditor {
             $0.activationPolicy == .regular && $0.bundleIdentifier != own && !$0.isHidden
         }
 
-        let model = GateEditorModel(name: name, layout: layout)
+        let model = GateEditorModel(name: name, layout: layout, canvas: runway.size)
         self.model = model
         let panel = OverlayPanel(frame: runway)
         panel.contentView = FirstClickHostingView(rootView: GateOverlay(model: model, live: permissions.accessibility) { [weak self] save in
@@ -135,12 +135,12 @@ final class GateEditor {
                 // Its minimum is bigger than the zone: it keeps the zone's corner, the zone says how
                 // much room it needs, and borders won't squeeze it further.
                 model?.tooSmall[id] = landed.size
-                let known = model?.minimums[id] ?? .zero
-                model?.minimums[id] = CGSize(
-                    width: landed.width > frame.width + 1 ? max(known.width, landed.width) : known.width,
-                    height: landed.height > frame.height + 1 ? max(known.height, landed.height) : known.height
-                )
                 WindowMover.setFrame(window, CGRect(origin: frame.origin, size: landed.size))
+                model?.learn(
+                    id,
+                    width: landed.width > frame.width + 1 ? landed.width : nil,
+                    height: landed.height > frame.height + 1 ? landed.height : nil
+                )
             } else {
                 // It can't grow (Calculator), so it sits in the middle of its zone.
                 model?.tooSmall[id] = nil
@@ -208,8 +208,13 @@ final class GateEditorModel: ObservableObject {
     @Published var layout: GateLayout?
     /// Apps whose window can't shrink to their zone, with the size they need.
     @Published var tooSmall: [String: CGSize] = [:]
-    /// The smallest each app's window has allowed, learned as it refuses; borders stop there.
-    var minimums: [String: CGSize] = [:]
+    /// The smallest each app's window has allowed, learned as it refuses and kept between gates;
+    /// borders stop there and new splits make room for it.
+    private(set) var minimums: [String: CGSize]
+    /// The runway's size, which the layout's ratios divide.
+    private let canvas: CGSize
+
+    private static let minimumsKey = "windowMinimums"
 
     /// The smallest a part of the layout can be along `axis`, from what its windows have allowed.
     func minimum(of node: GateLayout, along axis: GateLayout.Axis) -> CGFloat {
@@ -224,16 +229,55 @@ final class GateEditorModel: ObservableObject {
         }
     }
 
-    init(name: String, layout: GateLayout?) {
+    init(name: String, layout: GateLayout?, canvas: CGSize) {
         self.name = name
         self.layout = layout
+        self.canvas = canvas
+        let saved = UserDefaults.standard.dictionary(forKey: Self.minimumsKey) as? [String: [Double]] ?? [:]
+        minimums = saved.compactMapValues { $0.count == 2 ? CGSize(width: $0[0], height: $0[1]) : nil }
     }
 
     /// Dropping an app already in the gate moves it.
     func insert(_ id: String, beside target: String, at edge: GateLayout.Edge) {
         guard id != target, let layout else { return }
         let without = layout.removing(id) ?? .app(target)
-        self.layout = without.inserting(id, beside: target, at: edge)
+        self.layout = fit(without.inserting(id, beside: target, at: edge), in: canvas)
+    }
+
+    /// A window refused to shrink past this; the layout makes room for it.
+    func learn(_ id: String, width: CGFloat?, height: CGFloat?) {
+        let known = minimums[id] ?? .zero
+        let updated = CGSize(width: max(known.width, width ?? 0), height: max(known.height, height ?? 0))
+        guard updated != known else { return }
+        minimums[id] = updated
+        UserDefaults.standard.set(minimums.mapValues { [$0.width, $0.height] }, forKey: Self.minimumsKey)
+        if let layout {
+            self.layout = fit(layout, in: canvas)
+        }
+    }
+
+    /// Grows any part below what its windows allow, taking the room from its siblings in proportion
+    /// to what they can spare. A split whose minimums can't all fit is left as it is.
+    private func fit(_ node: GateLayout, in size: CGSize) -> GateLayout {
+        guard case .split(let axis, let children, var ratios) = node else { return node }
+        let length = axis == .columns ? size.width : size.height
+        let floors = children.map { minimum(of: $0, along: axis) / max(length, 1) }
+        if floors.reduce(0, +) <= 1 {
+            let deficit = zip(ratios, floors).reduce(0) { $0 + max($1.1 - $1.0, 0) }
+            let spare = zip(ratios, floors).map { max($0 - $1, 0) }
+            let totalSpare = spare.reduce(0, +)
+            if deficit > 0, totalSpare > 0 {
+                ratios = ratios.indices.map { index in
+                    ratios[index] < floors[index] ? floors[index] : ratios[index] - deficit * spare[index] / totalSpare
+                }
+            }
+        }
+        let fitted = children.indices.map { index in
+            fit(children[index], in: axis == .columns
+                ? CGSize(width: ratios[index] * size.width, height: size.height)
+                : CGSize(width: size.width, height: ratios[index] * size.height))
+        }
+        return .split(axis, fitted, ratios)
     }
 
     func remove(_ id: String) {

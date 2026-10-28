@@ -10,9 +10,14 @@ enum AppWindows {
     }
 
     static func main(of pid: pid_t, in content: SCShareableContent) -> SCWindow? {
+        candidates(of: pid, in: content).first
+    }
+
+    /// The app's windows, likeliest to be the real one first.
+    static func candidates(of pid: pid_t, in content: SCShareableContent) -> [SCWindow] {
         content.windows
             .filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 100 && $0.frame.height > 100 }
-            .max { rank($0) < rank($1) }
+            .sorted { rank($0) > rank($1) }
     }
 
     /// Some apps (VS Code) keep hidden helper windows; a titled one the user can see is the real thing.

@@ -14,9 +14,9 @@ enum Attention: Comparable {
     case urgent
 
     var color: Color {
+        // Two shades of "look when you can" read as one.
         switch self {
-        case .unread: .blue
-        case .finished: .green
+        case .unread, .finished: .blue
         case .mention: .orange
         case .urgent: .red
         }

@@ -67,6 +67,17 @@ final class Settings: ObservableObject {
     @Published var autoOpen: Bool {
         didSet { defaults.set(autoOpen, forKey: "autoOpen") }
     }
+    /// Shortcuts the user changed, by action; the rest use their standard keys.
+    @Published var shortcuts: [String: Shortcut] {
+        didSet {
+            if let data = try? JSONEncoder().encode(shortcuts) { defaults.set(data, forKey: "shortcuts") }
+        }
+    }
+
+    func shortcut(for action: ShortcutAction) -> Shortcut {
+        shortcuts[action.rawValue] ?? action.standard
+    }
+
     /// App pairs whose gate suggestion was dismissed, as "a|b".
     @Published var dismissedPairs: Set<String> {
         didSet { defaults.set(Array(dismissedPairs), forKey: "dismissedPairs") }
@@ -93,5 +104,6 @@ final class Settings: ObservableObject {
         squishAmount = defaults.object(forKey: "squishAmount") as? Double ?? 0.25
         autoOpen = defaults.object(forKey: "autoOpen") as? Bool ?? false
         dismissedPairs = Set(defaults.stringArray(forKey: "dismissedPairs") ?? [])
+        shortcuts = defaults.data(forKey: "shortcuts").flatMap { try? JSONDecoder().decode([String: Shortcut].self, from: $0) } ?? [:]
     }
 }

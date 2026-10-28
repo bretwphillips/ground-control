@@ -115,6 +115,7 @@ struct SettingsView: View {
                         granted: permissions.accessibility,
                         reason: "Notifications that mention any of these (comma separated) are urgent: they always fly by, even while you're focused or in a call. Reading notifications uses Accessibility; their text stays on this Mac."
                     )
+                    Stepper("Mentions turn urgent at \(settings.urgentMentions)", value: $settings.urgentMentions, in: 2...50)
                     Toggle("When a terminal finishes", isOn: $settings.terminalFinished)
                     if settings.terminalFinished {
                         PermissionNote(

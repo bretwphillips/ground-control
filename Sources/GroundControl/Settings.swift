@@ -74,6 +74,10 @@ final class Settings: ObservableObject {
     @Published var urgentWords: String {
         didSet { defaults.set(urgentWords, forKey: "urgentWords") }
     }
+    /// Unanswered mentions at or above this many turn urgent.
+    @Published var urgentMentions: Int {
+        didSet { defaults.set(urgentMentions, forKey: "urgentMentions") }
+    }
     @Published var terminalFinished: Bool {
         didSet { defaults.set(terminalFinished, forKey: "terminalFinished") }
     }
@@ -145,6 +149,7 @@ final class Settings: ObservableObject {
         flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5
         flyByTrigger = FlyByTrigger(rawValue: defaults.string(forKey: "flyByTrigger") ?? "") ?? .mentions
         urgentWords = defaults.string(forKey: "urgentWords") ?? "urgent, asap, prod, outage"
+        urgentMentions = defaults.object(forKey: "urgentMentions") as? Int ?? 5
         terminalFinished = defaults.object(forKey: "terminalFinished") as? Bool ?? true
         holdWhileFocused = defaults.object(forKey: "holdWhileFocused") as? Bool ?? true
         holdMinutes = defaults.object(forKey: "holdMinutes") as? Double ?? 3

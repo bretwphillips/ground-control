@@ -89,7 +89,10 @@ final class AppTracker: ObservableObject {
                 guard let id = app.bundleIdentifier, id != own else { return nil }
                 let pid = app.processIdentifier
                 let badge = badges[pid]
-                let fromBadge: Attention? = badge.map { $0 == "•" ? .unread : .mention }
+                // Enough unanswered mentions add up to urgent.
+                let fromBadge: Attention? = badge.map {
+                    $0 == "•" ? .unread : Badges.mentions($0) >= settings.urgentMentions ? .urgent : .mention
+                }
                 let attention = [marks[id], fromBadge].compactMap { $0 }.max()
                 return StripApp(id: id, name: app.localizedName ?? id, icon: app.icon ?? NSImage(), pid: pid, badge: badge, attention: attention)
             }
@@ -151,8 +154,10 @@ final class AppTracker: ObservableObject {
         guard announce, settings.flyBy, settings.flyByTrigger != .urgent else { return }
         let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
         for app in apps where app.pid != front {
-            if Badges.mentions(latest[app.pid]) > Badges.mentions(previous[app.pid]) {
-                call(Call(app: app, kind: .mention))
+            let now = Badges.mentions(latest[app.pid])
+            let before = Badges.mentions(previous[app.pid])
+            if now > before {
+                call(Call(app: app, kind: .mention, urgent: before < settings.urgentMentions && now >= settings.urgentMentions))
             } else if settings.flyByTrigger == .everything, latest[app.pid] != nil, previous[app.pid] == nil {
                 call(Call(app: app, kind: .badge))
             }

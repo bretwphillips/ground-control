@@ -8,6 +8,11 @@ need it, without swiping between desktops.
 
 - **The pattern**: the strip along one edge (top by default) where apps wait, with their Dock badges.
 - **Landing**: click an app in the strip and it comes forward, filling the screen beside the strip.
+- **Gate**: a saved arrangement of windows. Arrange your windows, click **+** in the strip (or
+  Save Windows as Gate… in the menu), and name it. Clicking the gate, or pressing ⌃⌥1 to ⌃⌥9,
+  puts every window back in place at once and brings them forward. Apps in a gate leave the
+  strip's app list; right-click a gate to update it to the current windows, rename or delete it.
+  Positions are kept relative to the space beside the strip, so gates survive strip changes.
 - **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
   preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
   or ignore it and it goes away. Each app gets
@@ -23,7 +28,8 @@ edge, shows badges, switches apps, and pulses a tile when a mention arrives. Eac
 adds to that, and Settings explains what it's for next to the feature that uses it.
 
 - **Accessibility**: the strip keeps its own slice of the screen (windows are kept out from
-  under it) and landed apps are sized to fit.
+  under it), landed apps are sized to fit, and gates put windows back in place. Without it,
+  a gate only brings its apps forward.
 - **Screen Recording**: window previews on the Large strip, and the live preview in fly-bys.
 
 ## Build and run

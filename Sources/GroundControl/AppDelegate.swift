@@ -3,6 +3,8 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = Settings.shared
     private let permissions = Permissions()
+    private let gateStore = GateStore()
+    private let hotKeys = HotKeys()
     private var tracker: AppTracker?
     private var previews: Previews?
     private var flyBy: FlyBy?
@@ -13,7 +15,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let tracker = AppTracker(settings: settings)
         let previews = Previews(tracker: tracker, settings: settings, permissions: permissions)
-        let strip = StripController(tracker: tracker, previews: previews, settings: settings, permissions: permissions)
+        let strip = StripController(
+            tracker: tracker, previews: previews, settings: settings, permissions: permissions, gateStore: gateStore
+        )
+        hotKeys.onGate = { [weak self, weak strip] index in
+            guard let gates = self?.gateStore.gates, index < gates.count else { return }
+            strip?.gates.open(gates[index])
+        }
         let flyBy = FlyBy(
             settings: settings,
             permissions: permissions,
@@ -42,6 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let saveGate = NSMenuItem(title: "Save Windows as Gate…", action: #selector(saveGate), keyEquivalent: "")
+        saveGate.target = self
+        menu.addItem(saveGate)
+
         let flights = NSMenu()
         for app in tracker?.apps ?? [] {
             let item = NSMenuItem(title: app.name, action: #selector(previewFlyBy(_:)), keyEquivalent: "")
@@ -55,6 +67,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Ground Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+
+    @objc private func saveGate() {
+        strip?.gates.saveCurrent()
     }
 
     @objc private func showSettings() {

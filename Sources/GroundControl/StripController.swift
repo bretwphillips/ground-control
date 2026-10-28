@@ -33,13 +33,16 @@ final class StripController {
     private var revealed = false
     private var lastNear = Date.distantPast
 
-    init(tracker: AppTracker, previews: Previews, settings: Settings, permissions: Permissions) {
+    private(set) var gates: GateController!
+
+    init(tracker: AppTracker, previews: Previews, settings: Settings, permissions: Permissions, gateStore: GateStore) {
         self.tracker = tracker
         self.settings = settings
         self.permissions = permissions
+        gates = GateController(store: gateStore, permissions: permissions) { [weak self] in self?.runway() }
 
-        let view = StripView(tracker: tracker, previews: previews, settings: settings) { [weak self] app in
-            self?.land(app)
+        let view = StripView(tracker: tracker, previews: previews, settings: settings, gates: gateStore, gateController: gates) {
+            [weak self] app in self?.land(app)
         }
         panel.contentView = FirstClickHostingView(rootView: view)
 

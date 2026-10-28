@@ -45,6 +45,7 @@ final class AppTracker: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             self?.pollBadges()
         }
+        log.notice("launched, trusted: \(self.trusted)")
         badges = DockBadges.read()
         refresh()
     }
@@ -63,7 +64,10 @@ final class AppTracker: ObservableObject {
 
     private func pollBadges() {
         let nowTrusted = AXIsProcessTrusted()
-        if nowTrusted != trusted { trusted = nowTrusted }
+        if nowTrusted != trusted {
+            trusted = nowTrusted
+            log.notice("trusted: \(nowTrusted)")
+        }
         let latest = DockBadges.read()
         guard latest != badges else { return }
         badges = latest

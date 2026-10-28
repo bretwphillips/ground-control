@@ -2,16 +2,25 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = Settings.shared
+    private let permissions = Permissions()
     private var tracker: AppTracker?
+    private var previews: Previews?
+    private var flyBy: FlyBy?
     private var strip: StripController?
+    private var settingsWindow: SettingsWindow?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AX.requestTrust()
-
         let tracker = AppTracker(settings: settings)
+        let previews = Previews(tracker: tracker, settings: settings, permissions: permissions)
+        let strip = StripController(tracker: tracker, previews: previews, settings: settings, permissions: permissions)
+        let flyBy = FlyBy(settings: settings, permissions: permissions) { [weak strip] in strip?.runway() }
+        tracker.onCall = { [weak flyBy] app, preview in flyBy?.call(app, preview: preview) }
         self.tracker = tracker
-        strip = StripController(tracker: tracker, settings: settings)
+        self.previews = previews
+        self.strip = strip
+        self.flyBy = flyBy
+        settingsWindow = SettingsWindow(settings: settings, permissions: permissions)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "airplane", accessibilityDescription: "Ground Control")
@@ -24,50 +33,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        let edges = NSMenu()
-        for edge in StripEdge.allCases {
-            let item = NSMenuItem(title: edge.title, action: #selector(pickEdge(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = edge.rawValue
-            item.state = edge == settings.edge ? .on : .off
-            edges.addItem(item)
-        }
-        let edgeItem = NSMenuItem(title: "Strip Edge", action: nil, keyEquivalent: "")
-        edgeItem.submenu = edges
-        menu.addItem(edgeItem)
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
-        let apps = NSMenu()
-        let own = Bundle.main.bundleIdentifier
-        let running = NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != own }
-            .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
-        for app in running {
-            guard let id = app.bundleIdentifier else { continue }
-            let item = NSMenuItem(title: app.localizedName ?? id, action: #selector(toggleApp(_:)), keyEquivalent: "")
+        let flights = NSMenu()
+        for app in tracker?.apps ?? [] {
+            let item = NSMenuItem(title: app.name, action: #selector(previewFlyBy(_:)), keyEquivalent: "")
             item.target = self
-            item.representedObject = id
-            item.state = settings.hiddenApps.contains(id) ? .off : .on
-            apps.addItem(item)
+            item.representedObject = app.id
+            flights.addItem(item)
         }
-        let appsItem = NSMenuItem(title: "Apps in Strip", action: nil, keyEquivalent: "")
-        appsItem.submenu = apps
-        menu.addItem(appsItem)
+        let flyByItem = NSMenuItem(title: "Preview a Fly-by", action: nil, keyEquivalent: "")
+        flyByItem.submenu = flights
+        menu.addItem(flyByItem)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Ground Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
-    @objc private func pickEdge(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let edge = StripEdge(rawValue: raw) else { return }
-        settings.edge = edge
+    @objc private func showSettings() {
+        settingsWindow?.show()
     }
 
-    @objc private func toggleApp(_ sender: NSMenuItem) {
+    /// Waits a few seconds so there's time to click back into another app first.
+    @objc private func previewFlyBy(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
-        if settings.hiddenApps.contains(id) {
-            settings.hiddenApps.remove(id)
-        } else {
-            settings.hiddenApps.insert(id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let app = self?.tracker?.apps.first(where: { $0.id == id }) else { return }
+            self?.tracker?.call(app, preview: true)
         }
     }
 }

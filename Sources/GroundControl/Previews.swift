@@ -23,7 +23,8 @@ final class Previews: ObservableObject {
     private func refresh() {
         guard settings.size == .large, permissions.screenRecording, !busy else { return }
         busy = true
-        let pids = tracker.apps.map(\.pid)
+        // Every app, since the strip offers them all while a gate is being built.
+        let pids = tracker.allApps.map(\.pid)
         Task { @MainActor in
             defer { self.busy = false }
             guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false) else {
@@ -31,7 +32,9 @@ final class Previews: ObservableObject {
             }
             var latest = self.images.filter { pids.contains($0.key) }
             for pid in pids {
-                guard let window = AppWindows.main(of: pid, in: content) else { continue }
+                // Hidden and minimized windows aren't drawn, and capturing them can hang; their last
+                // picture stays.
+                guard let window = AppWindows.main(of: pid, in: content), window.isOnScreen else { continue }
                 let config = SCStreamConfiguration()
                 let scale = 300 / window.frame.width
                 config.width = Int(window.frame.width * scale)

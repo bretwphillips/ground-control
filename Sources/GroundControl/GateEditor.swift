@@ -20,6 +20,7 @@ final class GateEditor {
     private var opened: Set<String> = []
     private var applyPending = false
     private var latest: GateLayout?
+    private var model: GateEditorModel?
 
     init(permissions: Permissions, store: GateStore) {
         self.permissions = permissions
@@ -41,6 +42,7 @@ final class GateEditor {
         NSApp.activate()
 
         let model = GateEditorModel(name: name, layout: layout)
+        self.model = model
         let panel = OverlayPanel(frame: runway)
         panel.contentView = FirstClickHostingView(rootView: GateOverlay(model: model, live: permissions.accessibility) { [weak self] save in
             if save, let layout = model.layout {
@@ -63,14 +65,27 @@ final class GateEditor {
         guard panel != nil else { return }
         if NSApp.isActive || attempts == 0 {
             NSApp.hideOtherApplications(nil)
-            previousFront?.hide()
             log.notice("editor: cleared desktop, active: \(NSApp.isActive)")
+            keepHidden(attempts: 20)
             // Apps already in the gate come back.
             apply(latest)
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.clearDesktop(attempts: attempts - 1)
+        }
+    }
+
+    /// The app that was in front can refuse to hide while it's still giving up focus, so anything
+    /// outside the gate is hidden again until it stays hidden.
+    private func keepHidden(attempts: Int) {
+        guard panel != nil, attempts > 0 else { return }
+        let gate = Set(latest?.leaves ?? [])
+        let showing = hiddenByUs.filter { !$0.isHidden && !gate.contains($0.bundleIdentifier ?? "") }
+        guard !showing.isEmpty else { return }
+        showing.forEach { $0.hide() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.keepHidden(attempts: attempts - 1)
         }
     }
 
@@ -85,6 +100,7 @@ final class GateEditor {
 
     private func finish() {
         cancellable = nil
+        model = nil
         panel?.orderOut(nil)
         panel = nil
         hiddenByUs.forEach { $0.unhide() }
@@ -130,16 +146,24 @@ final class GateEditor {
                 homes[id] = (window, home)
             }
             WindowMover.setFrame(window, frame)
-            // Some windows can't grow (Calculator) or shrink past a minimum; those sit centred instead.
-            if let landed = WindowMover.frame(of: window), landed.size != frame.size {
-                let centred = CGRect(
+            guard let landed = WindowMover.frame(of: window), landed.size != frame.size else {
+                model?.tooSmall[id] = nil
+                continue
+            }
+            if landed.width > frame.width + 1 || landed.height > frame.height + 1 {
+                // Its minimum is bigger than the zone: it keeps the zone's corner, and the zone says
+                // how much room it needs.
+                model?.tooSmall[id] = landed.size
+                WindowMover.setFrame(window, CGRect(origin: frame.origin, size: landed.size))
+            } else {
+                // It can't grow (Calculator), so it sits in the middle of its zone.
+                model?.tooSmall[id] = nil
+                WindowMover.setFrame(window, CGRect(
                     x: frame.midX - landed.width / 2,
                     y: frame.midY - landed.height / 2,
                     width: landed.width,
                     height: landed.height
-                )
-                WindowMover.setFrame(window, centred)
-                log.notice("editor: \(id, privacy: .public) kept its size \(String(describing: landed.size), privacy: .public)")
+                ))
             }
         }
         placed = ids
@@ -177,6 +201,7 @@ final class OverlayPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
+        acceptsMouseMovedEvents = true
     }
 
     override var canBecomeKey: Bool { true }
@@ -185,6 +210,8 @@ final class OverlayPanel: NSPanel {
 final class GateEditorModel: ObservableObject {
     @Published var name: String
     @Published var layout: GateLayout?
+    /// Apps whose window can't shrink to their zone, with the size they need.
+    @Published var tooSmall: [String: CGSize] = [:]
 
     init(name: String, layout: GateLayout?) {
         self.name = name
@@ -324,11 +351,11 @@ private struct SplitView: View {
                         }
                         .contentShape(Rectangle())
                         .offset(x: columns ? boundary * size.width - 7 : 0, y: columns ? 0 : boundary * size.height - 7)
-                        .onHover { inside in
-                            if inside {
-                                (columns ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
-                            } else {
-                                NSCursor.pop()
+                        // Set on every move: the windows underneath keep resetting it.
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active: (columns ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
+                            case .ended: NSCursor.arrow.set()
                             }
                         }
                         .gesture(
@@ -365,12 +392,18 @@ private struct LeafView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
+                let needs = model.tooSmall[id]
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.accentColor.opacity(live ? 0.04 : 0.2))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.accentColor.opacity(0.8), lineWidth: 2))
+                    .fill((needs == nil ? Color.accentColor : .orange).opacity(live ? 0.04 : 0.2))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder((needs == nil ? Color.accentColor : .orange).opacity(0.8), lineWidth: 2))
                 HStack(spacing: 8) {
                     AppIcon(bundleID: id, side: 24)
                     Text(AppIcon.name(id)).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    if let needs {
+                        Text("needs \(Int(needs.width))×\(Int(needs.height))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                    }
                     Button { model.remove(id) } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }

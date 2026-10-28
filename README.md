@@ -16,6 +16,9 @@ need it, without swiping between desktops.
   you go; Cancel puts them back. Clicking a gate, or pressing ⌃⌥1 to ⌃⌥9, puts each window in
   its spot and brings them forward, launching any app that isn't running. Right-click a gate to
   edit or delete it. Apps in a gate leave the strip's app list.
+- **Shortcuts**: ⌃⌥1 to ⌃⌥9 open gates 1 to 9, ⌃⌥[ and ⌃⌥] step to the gate on either side
+  (wrapping around), ⌃⌥Tab flips back to the gate before, and ⌃⌥` / ⌃⌥⇧` switch to the next or
+  previous app in the open gate. (⌃⌥ with the arrows is left to window snappers like Magnet.)
 - **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
   preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
   or ignore it and it goes away. Each app gets

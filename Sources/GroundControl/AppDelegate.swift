@@ -18,11 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let strip = StripController(
             tracker: tracker, previews: previews, settings: settings, permissions: permissions, gateStore: gateStore
         )
-        hotKeys.onGate = { [weak self, weak strip] index in
-            guard let gates = self?.gateStore.gates, index < gates.count else { return }
-            strip?.gates.open(gates[index])
+        hotKeys.onAction = { [weak self, weak strip] action in
+            guard let gates = strip?.gates else { return }
+            switch action {
+            case .gate(let index):
+                guard let all = self?.gateStore.gates, index < all.count else { return }
+                gates.open(all[index])
+            case .previousGate:
+                gates.openPrevious()
+            case .stepGate(let step):
+                gates.step(by: step)
+            case .stepApp(let step):
+                gates.stepApp(by: step)
+            }
         }
-        hotKeys.onPreviousGate = { [weak strip] in strip?.gates.openPrevious() }
         let flyBy = FlyBy(
             settings: settings,
             permissions: permissions,

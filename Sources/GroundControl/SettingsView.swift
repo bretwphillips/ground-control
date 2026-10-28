@@ -69,7 +69,7 @@ struct SettingsView: View {
                     Stepper("Grows by \(Int(settings.squishAmount * 100))%", value: $settings.squishAmount, in: 0.1...0.6, step: 0.05)
                 }
                 Toggle("Open an app's gate when you switch to it", isOn: $settings.autoOpen)
-                Text("⌃⌥1 to ⌃⌥9 open gates; ⌃⌥Tab flips back to the one before. Moving and resizing windows uses Accessibility.")
+                Text("⌃⌥1 to ⌃⌥9 open gates, ⌃⌥[ and ⌃⌥] step through them, and ⌃⌥Tab flips back to the one before. ⌃⌥` and ⌃⌥⇧` switch apps within the gate. Moving and resizing windows uses Accessibility.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

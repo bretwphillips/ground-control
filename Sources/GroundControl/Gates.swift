@@ -376,6 +376,28 @@ final class GateController {
         }
     }
 
+    /// Opens the gate `step` places along the strip from the open one, wrapping around the ends.
+    /// With none open it starts from the last one that was.
+    func step(by step: Int) {
+        let gates = store.gates
+        guard !gates.isEmpty else { return }
+        let from = gates.firstIndex { $0.id == (store.current ?? store.previous) }
+        let index = from.map { (($0 + step) % gates.count + gates.count) % gates.count } ?? 0
+        open(gates[index])
+    }
+
+    /// Brings forward the app `step` places along the open gate from the one in front, wrapping
+    /// around; squish then grows it.
+    func stepApp(by step: Int) {
+        guard let id = store.current, let gate = store.gates.first(where: { $0.id == id }) else { return }
+        let leaves = gate.layout.leaves
+        guard !leaves.isEmpty else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let from = leaves.firstIndex { $0 == front } ?? -step
+        let next = leaves[((from + step) % leaves.count + leaves.count) % leaves.count]
+        NSRunningApplication.runningApplications(withBundleIdentifier: next).first?.activate()
+    }
+
     /// Flips back to the gate open before this one.
     func openPrevious() {
         guard let target = store.previous, let gate = store.gates.first(where: { $0.id == target }) else { return }

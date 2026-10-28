@@ -32,6 +32,7 @@ final class StripController {
     private var pointerTimer: Timer?
     private var revealed = false
     private var revealedForKeys = false
+    private var flashUntil = Date.distantPast
     private var lastNear = Date.distantPast
 
     private(set) var gates: GateController!
@@ -73,6 +74,16 @@ final class StripController {
         tracker.$calling
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.tick() }
+            .store(in: &cancellables)
+        // The runway grows or shrinks with the strip, so the open gate re-fits it.
+        settings.$autoHide
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let id = gateStore.current, let gate = gateStore.gates.first(where: { $0.id == id }) else { return }
+                gates.open(gate)
+            }
             .store(in: &cancellables)
         gateStore.$editing
             .receive(on: RunLoop.main)
@@ -120,7 +131,15 @@ final class StripController {
 
     /// With Accessibility, the strip keeps its slice of the screen clear. Without it, it can't move
     /// windows aside, so it hides until the pointer reaches its edge instead of covering them.
-    private var reserves: Bool { settings.keepClear && permissions.accessibility }
+    private var reserves: Bool { settings.keepClear && permissions.accessibility && !settings.autoHide }
+
+    /// Brings a hidden strip out for a moment, so a shortcut or swipe shows where it landed.
+    func flash() {
+        guard !reserves else { return }
+        flashUntil = Date().addingTimeInterval(1.5)
+        tick()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in self?.tick() }
+    }
 
     /// Where landed apps go.
     func runway() -> CGRect? {
@@ -147,7 +166,7 @@ final class StripController {
             // Full-screen windows can't be resized, so the strip steps aside on their desktops.
             shown = false
         } else {
-            shown = reserves || revealed || revealedForKeys || !tracker.calling.isEmpty || gates.store.editing
+            shown = reserves || revealed || revealedForKeys || Date() < flashUntil || !tracker.calling.isEmpty || gates.store.editing
         }
         if shown != panel.isVisible {
             shown ? panel.orderFrontRegardless() : panel.orderOut(nil)

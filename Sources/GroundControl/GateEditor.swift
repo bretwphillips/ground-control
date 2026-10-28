@@ -16,6 +16,8 @@ final class GateEditor {
     /// Where each moved window started, so Cancel can put it back.
     private var homes: [String: (window: AXUIElement, frame: CGRect)] = [:]
     private var placed: Set<String> = []
+    /// Apps asked to open a window this session, so they're only asked once.
+    private var opened: Set<String> = []
     private var applyPending = false
     private var latest: GateLayout?
 
@@ -90,6 +92,7 @@ final class GateEditor {
         previousFront = nil
         homes = [:]
         placed = []
+        opened = []
         store.editing = false
     }
 
@@ -114,28 +117,43 @@ final class GateEditor {
         }
         for (id, frame) in frames {
             guard let app = running(id) else {
-                if !placed.contains(id) { launch(id) }
+                openWindow(id)
                 continue
             }
-            if app.isHidden { app.unhide() }
+            app.unhide()
             guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
-                log.notice("editor: no window for \(id, privacy: .public)")
+                // Running with every window closed, like Calendar after ⌘W.
+                openWindow(id)
                 continue
             }
             if homes[id] == nil, let home = WindowMover.frame(of: window) {
                 homes[id] = (window, home)
             }
             WindowMover.setFrame(window, frame)
-            let landed = WindowMover.frame(of: window).map { String(describing: $0) } ?? "?"
-            log.notice("editor: \(id, privacy: .public) to \(String(describing: frame), privacy: .public), now \(landed, privacy: .public)")
+            // Some windows can't grow (Calculator) or shrink past a minimum; those sit centred instead.
+            if let landed = WindowMover.frame(of: window), landed.size != frame.size {
+                let centred = CGRect(
+                    x: frame.midX - landed.width / 2,
+                    y: frame.midY - landed.height / 2,
+                    width: landed.width,
+                    height: landed.height
+                )
+                WindowMover.setFrame(window, centred)
+                log.notice("editor: \(id, privacy: .public) kept its size \(String(describing: landed.size), privacy: .public)")
+            }
         }
         placed = ids
     }
 
-    /// A launching app has no window yet, so it's placed again once it has had time to open one.
-    private func launch(_ id: String) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    /// Opening an app that's already running asks it for a window, as clicking its Dock icon does.
+    /// The window takes a moment to appear, so it's placed again a few times after.
+    private func openWindow(_ id: String) {
+        guard !opened.contains(id), let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return }
+        opened.insert(id)
+        log.notice("editor: asking \(id, privacy: .public) for a window")
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
         for delay in [1.5, 3.0, 5.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self else { return }

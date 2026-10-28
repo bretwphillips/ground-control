@@ -105,18 +105,16 @@ struct StripView: View {
         .onPreferenceChange(TileFrames.self, perform: onTiles)
     }
 
-    /// The keys that reach this gate with ⌃⌥ held: its number, and the step and back keys when it's
-    /// beside or before the open gate.
+    /// The one key worth showing on this gate with ⌃⌥ held, so tiles don't fill with keys: the
+    /// step key beside the open gate, else the back key on the last gate, else its number.
     private func gateKeys(_ index: Int, _ gate: Gate) -> String? {
-        var parts: [String] = []
-        if index < 9 { parts.append("\(index + 1)") }
         let all = gates.gates
         if let current = all.firstIndex(where: { $0.id == gates.current }), all.count > 1, index != current {
-            if index == (current - 1 + all.count) % all.count, let key = settings.hint(.gateLeft) { parts.append(key) }
-            if index == (current + 1) % all.count, let key = settings.hint(.gateRight) { parts.append(key) }
+            if index == (current + 1) % all.count, let key = settings.hint(.gateRight) { return key }
+            if index == (current - 1 + all.count) % all.count, let key = settings.hint(.gateLeft) { return key }
         }
-        if gate.id == gates.previous, gate.id != gates.current, let key = settings.hint(.back) { parts.append(key) }
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
+        if gate.id == gates.previous, gate.id != gates.current, let key = settings.hint(.back) { return key }
+        return index < 9 ? "\(index + 1)" : nil
     }
 }
 

@@ -90,6 +90,8 @@ final class StripController {
                 let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
                 if let id = app?.bundleIdentifier { self?.patterns.activated(id) }
                 self?.gates.focusChanged()
+                // The next and previous apps move with the one in front.
+                if KeyHints.shared.showing { self?.gates.showWindowHints(true) }
             }
             .store(in: &cancellables)
         // Polled for new windows, ones dragged under the strip, and the green button; AX only reports

@@ -7,6 +7,8 @@ struct StripView: View {
     @ObservedObject var gates: GateStore
     let gateController: GateController
     let onLand: (StripApp) -> Void
+    /// The tile under the pointer and where it sits in the strip's window, or nil when it leaves.
+    let onHover: (Peek?, CGRect) -> Void
 
     var body: some View {
         let horizontal = settings.edge.isHorizontal
@@ -26,6 +28,7 @@ struct StripView: View {
                         calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
                     )
                     .onTapGesture { gateController.open(gate) }
+                    .peek(.gate(gate.id), onHover)
                     .contextMenu {
                         Button("Edit Gate…") { gateController.edit(gate) }
                         Divider()
@@ -51,6 +54,7 @@ struct StripView: View {
                         calling: tracker.calling.contains(app.id)
                     )
                     .onTapGesture { onLand(app) }
+                    .peek(.app(app.id), onHover)
                     .onDrag {
                         DraggedApp.id = app.id
                         return NSItemProvider(object: app.id as NSString)
@@ -97,7 +101,7 @@ private struct GateTile: View {
             .frame(height: 24)
         case .large:
             VStack(spacing: 4) {
-                layoutMap.frame(width: 150, height: 84)
+                GateMap(gate: gate, apps: apps, previews: previews).frame(width: 150, height: 84)
                 HStack(spacing: 4) {
                     Image(systemName: "airplane.arrival").font(.system(size: 10))
                     Text(gate.name).font(.system(size: 11, weight: .medium)).lineLimit(1)
@@ -117,9 +121,16 @@ private struct GateTile: View {
             }
         }
     }
+}
 
-    /// Where each window sits.
-    private var layoutMap: some View {
+/// Where each of a gate's windows sits, with live previews where there are any.
+struct GateMap: View {
+    let gate: Gate
+    let apps: [String: StripApp]
+    let previews: [pid_t: NSImage]
+    var iconSide: CGFloat = 22
+
+    var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.08))
@@ -129,7 +140,7 @@ private struct GateTile: View {
                         if let pid = apps[spot.id]?.pid, let image = previews[pid] {
                             Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
                         } else {
-                            Color.clear.overlay { AppIcon(bundleID: spot.id, side: min(22, frame.height * 0.6)) }
+                            Color.clear.overlay { AppIcon(bundleID: spot.id, side: min(iconSide, frame.height * 0.6)) }
                         }
                     }
                     .frame(width: frame.width, height: frame.height)
@@ -259,5 +270,14 @@ private struct Badge: View {
                     .background(Capsule().fill(.red))
             }
         }
+    }
+}
+
+extension View {
+    /// Reports hovering, with the view's frame in its window, for the peek beside the strip.
+    func peek(_ peek: Peek, _ report: @escaping (Peek?, CGRect) -> Void) -> some View {
+        background(GeometryReader { proxy in
+            Color.clear.onHover { inside in report(inside ? peek : nil, proxy.frame(in: .global)) }
+        })
     }
 }

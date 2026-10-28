@@ -6,6 +6,7 @@ struct StripView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var gates: GateStore
     let gateController: GateController
+    @ObservedObject var patterns: Patterns
     let onLand: (StripApp) -> Void
     /// Where each tile sits in the strip's window, for finding the one under the pointer.
     let onTiles: ([Peek: CGRect]) -> Void
@@ -35,6 +36,16 @@ struct StripView: View {
                         Button("Delete Gate") { gates.delete(gate.id) }
                     }
                     .help(index < 9 ? "\(gate.name)  ⌃⌥\(index + 1)" : gate.name)
+                }
+                if !gates.editing, let pair = patterns.suggestion {
+                    SuggestionTile(pair: pair, size: settings.size) {
+                        if let gate = patterns.accept() {
+                            gates.save(gate)
+                            gateController.open(gate)
+                        }
+                    } dismiss: {
+                        patterns.dismiss()
+                    }
                 }
                 if !gates.editing {
                     SaveGateTile(size: settings.size)
@@ -152,6 +163,40 @@ struct GateMap: View {
                 }
             }
         }
+    }
+}
+
+/// "You keep switching between these two: make them a gate?"
+private struct SuggestionTile: View {
+    let pair: Patterns.Pair
+    let size: StripSize
+    let accept: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 2) {
+                AppIcon(bundleID: pair.first, side: 18)
+                Image(systemName: "arrow.left.arrow.right").font(.system(size: 9, weight: .bold))
+                AppIcon(bundleID: pair.second, side: 18)
+            }
+            if size != .icons {
+                Text("Make a gate?").font(.system(size: 11, weight: .medium))
+            }
+            Button(action: dismiss) {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Don't suggest these two again")
+        }
+        .padding(.horizontal, 7)
+        .frame(height: size == .large ? 84 : 24)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18)))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3])))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: accept)
+        .help("You switch between these two a lot. Click to make them a gate, side by side.")
     }
 }
 

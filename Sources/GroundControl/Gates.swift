@@ -79,6 +79,67 @@ indirect enum GateLayout: Codable, Equatable {
     }
 }
 
+extension GateLayout {
+    /// The smallest this part can be along `axis`, from the windows' known minimums.
+    func minimum(along axis: Axis, _ minimums: [String: CGSize]) -> CGFloat {
+        switch self {
+        case .app(let id):
+            let size = minimums[id] ?? .zero
+            return axis == .columns ? size.width : size.height
+        case .split(let splitAxis, let children, _):
+            let parts = children.map { $0.minimum(along: axis, minimums) }
+            // Side by side the minimums add up; stacked across, the widest one decides.
+            return splitAxis == axis ? parts.reduce(0, +) : parts.max() ?? 0
+        }
+    }
+
+    /// Grows the part holding `id` by `factor` at every level down to it, taking the room from its
+    /// siblings in proportion, but never squeezing them below their windows' minimums.
+    func squished(toward id: String, by factor: Double, in size: CGSize, _ minimums: [String: CGSize]) -> GateLayout {
+        guard case .split(let axis, var children, let ratios) = self,
+              let index = children.firstIndex(where: { $0.leaves.contains(id) }) else { return self }
+        let length = max(axis == .columns ? size.width : size.height, 1)
+        var updated = ratios
+        let others = 1 - ratios[index]
+        if others > 0 {
+            var grown = min(ratios[index] * factor, 0.9)
+            for sibling in ratios.indices where sibling != index {
+                updated[sibling] = ratios[sibling] * (1 - grown) / others
+            }
+            // Siblings that would go below their minimum keep it, and the growth gives way.
+            for sibling in ratios.indices where sibling != index {
+                let floor = min(ratios[sibling], children[sibling].minimum(along: axis, minimums) / length)
+                if updated[sibling] < floor {
+                    grown -= floor - updated[sibling]
+                    updated[sibling] = floor
+                }
+            }
+            updated[index] = max(grown, ratios[index])
+            let total = updated.reduce(0, +)
+            updated = updated.map { $0 / total }
+        }
+        let childSize = axis == .columns
+            ? CGSize(width: updated[index] * size.width, height: size.height)
+            : CGSize(width: size.width, height: updated[index] * size.height)
+        children[index] = children[index].squished(toward: id, by: factor, in: childSize, minimums)
+        return .split(axis, children, updated)
+    }
+}
+
+/// The smallest size each app's window has allowed, learned by the gate editor.
+enum WindowMinimums {
+    static let key = "windowMinimums"
+
+    static func load() -> [String: CGSize] {
+        let saved = UserDefaults.standard.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+        return saved.compactMapValues { $0.count == 2 ? CGSize(width: $0[0], height: $0[1]) : nil }
+    }
+
+    static func save(_ minimums: [String: CGSize]) {
+        UserDefaults.standard.set(minimums.mapValues { [$0.width, $0.height] }, forKey: key)
+    }
+}
+
 struct Gate: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
@@ -88,7 +149,13 @@ struct Gate: Codable, Identifiable, Equatable {
 final class GateStore: ObservableObject {
     @Published private(set) var gates: [Gate] = []
     /// The gate opened last, until another opens.
-    @Published var current: UUID?
+    @Published var current: UUID? {
+        didSet {
+            if let oldValue, oldValue != current { previous = oldValue }
+        }
+    }
+    /// The gate open before the current one, for flipping back and forth.
+    private(set) var previous: UUID?
     /// A gate is being built over the runway.
     @Published var editing = false
 
@@ -139,11 +206,46 @@ final class GateController {
     /// Apps asked to reopen while this gate opened, so each is only asked once.
     private var reopened: Set<String> = []
 
-    init(store: GateStore, permissions: Permissions, runway: @escaping () -> CGRect?) {
+    private let settings: Settings
+
+    init(store: GateStore, permissions: Permissions, settings: Settings, runway: @escaping () -> CGRect?) {
         self.store = store
         self.permissions = permissions
+        self.settings = settings
         self.runway = runway
         editor = GateEditor(permissions: permissions, store: store)
+    }
+
+    /// The gate's layout with the focused app grown, when squish is on.
+    private func layout(of gate: Gate, focus: String?, in runway: CGRect) -> GateLayout {
+        guard settings.squish, let focus else { return gate.layout }
+        return gate.layout.squished(toward: focus, by: 1 + settings.squishAmount, in: runway.size, WindowMinimums.load())
+    }
+
+    /// Called when the user switches apps. Inside the open gate, the newly focused app grows; with
+    /// auto-open on, switching to an app that belongs to another gate opens that gate.
+    func focusChanged() {
+        // Opening a gate activates each of its apps in turn; those switches aren't the user's.
+        guard permissions.accessibility, !store.editing, Date().timeIntervalSince(openedAt) > 0.6,
+              let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return }
+        let current = store.gates.first { $0.id == store.current }
+        if let current, current.layout.leaves.contains(front) {
+            guard settings.squish, let runway = runway().map(WindowMover.axFrame) else { return }
+            for (id, frame) in layout(of: current, focus: front, in: runway).frames(in: runway) {
+                place(id, in: frame, attempts: 1)
+            }
+            // The new arrangement is where the windows belong now.
+            settled = [:]
+            openedAt = Date().addingTimeInterval(-2.5)
+        } else if settings.autoOpen, let gate = gate(for: front) {
+            open(gate, focus: front)
+        }
+    }
+
+    /// Flips back to the gate open before this one.
+    func openPrevious() {
+        guard let target = store.previous, let gate = store.gates.first(where: { $0.id == target }) else { return }
+        open(gate)
     }
 
     /// `focus` is the app to end up in front; by default the app in front keeps focus if it's in
@@ -154,10 +256,10 @@ final class GateController {
         settled = [:]
         reopened = []
         guard let runway = runway().map(WindowMover.axFrame) else { return }
-        let frames = gate.layout.frames(in: runway)
-
+        let leaves = gate.layout.leaves
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let focus = frames.first { $0.id == wanted }?.id ?? frames.first { $0.id == front }?.id ?? frames.first?.id
+        let focus = leaves.first { $0 == wanted } ?? leaves.first { $0 == front } ?? leaves.first
+        let frames = layout(of: gate, focus: focus, in: runway).frames(in: runway)
         var order = frames.filter { $0.id != focus }
         order += frames.filter { $0.id == focus }
 

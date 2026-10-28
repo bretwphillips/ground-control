@@ -35,6 +35,7 @@ final class StripController {
 
     private(set) var gates: GateController!
     private var peeks: PeekController!
+    private var patterns: Patterns!
     /// Tile frames in the strip window's coordinates, which run down from its top-left.
     private var tiles: [Peek: CGRect] = [:]
     private var hovered: Peek?
@@ -43,7 +44,8 @@ final class StripController {
         self.tracker = tracker
         self.settings = settings
         self.permissions = permissions
-        gates = GateController(store: gateStore, permissions: permissions) { [weak self] in self?.runway() }
+        gates = GateController(store: gateStore, permissions: permissions, settings: settings) { [weak self] in self?.runway() }
+        patterns = Patterns(settings: settings, store: gateStore)
         peeks = PeekController(tracker: tracker, previews: previews, gates: gateStore, settings: settings)
 
         let view = StripView(
@@ -52,6 +54,7 @@ final class StripController {
             settings: settings,
             gates: gateStore,
             gateController: gates,
+            patterns: patterns,
             onLand: { [weak self] app in self?.land(app) },
             onTiles: { [weak self] tiles in self?.tiles = tiles }
         )
@@ -81,6 +84,13 @@ final class StripController {
                 .sink { [weak self] _ in self?.tick() }
                 .store(in: &cancellables)
         }
+        workspace.publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .sink { [weak self] note in
+                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                if let id = app?.bundleIdentifier { self?.patterns.activated(id) }
+                self?.gates.focusChanged()
+            }
+            .store(in: &cancellables)
         // Polled for new windows, ones dragged under the strip, and the green button; AX only reports
         // those to an observer per app.
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in

@@ -55,6 +55,22 @@ final class Settings: ObservableObject {
     @Published var flyBySeconds: Double {
         didSet { defaults.set(flyBySeconds, forKey: "flyBySeconds") }
     }
+    /// The focused app in the open gate grows, its neighbours give way.
+    @Published var squish: Bool {
+        didSet { defaults.set(squish, forKey: "squish") }
+    }
+    /// How much the focused app grows: 0.25 is a quarter more room.
+    @Published var squishAmount: Double {
+        didSet { defaults.set(squishAmount, forKey: "squishAmount") }
+    }
+    /// Switching to an app that belongs to a gate opens the gate.
+    @Published var autoOpen: Bool {
+        didSet { defaults.set(autoOpen, forKey: "autoOpen") }
+    }
+    /// App pairs whose gate suggestion was dismissed, as "a|b".
+    @Published var dismissedPairs: Set<String> {
+        didSet { defaults.set(Array(dismissedPairs), forKey: "dismissedPairs") }
+    }
 
     var thickness: CGFloat {
         switch (size, edge.isHorizontal) {
@@ -73,5 +89,9 @@ final class Settings: ObservableObject {
         flyBy = defaults.object(forKey: "flyBy") as? Bool ?? true
         flyByPreview = defaults.object(forKey: "flyByPreview") as? Bool ?? true
         flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5
+        squish = defaults.object(forKey: "squish") as? Bool ?? true
+        squishAmount = defaults.object(forKey: "squishAmount") as? Double ?? 0.25
+        autoOpen = defaults.object(forKey: "autoOpen") as? Bool ?? false
+        dismissedPairs = Set(defaults.stringArray(forKey: "dismissedPairs") ?? [])
     }
 }

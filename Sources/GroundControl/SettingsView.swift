@@ -44,14 +44,11 @@ struct SettingsView: View {
                     ForEach(StripSize.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 if settings.size == .large {
-                    Toggle("Show window previews", isOn: $settings.previews)
-                    if settings.previews {
-                        PermissionNote(
-                            permission: .screenRecording,
-                            granted: permissions.screenRecording,
-                            reason: "Uses Screen Recording to take small pictures of each app's window. Without it, tiles show the app's icon."
-                        )
-                    }
+                    PermissionNote(
+                        permission: .screenRecording,
+                        granted: permissions.screenRecording,
+                        reason: "Large tiles use Screen Recording to show a small picture of each app's window. Without it, they show the app's icon."
+                    )
                 }
             }
 
@@ -100,7 +97,7 @@ struct SettingsView: View {
         .frame(minHeight: 620)
         .onChange(of: settings.keepClear) { _, on in requestIfNeeded(on, .accessibility) }
         .onChange(of: settings.flyByPreview) { _, on in requestIfNeeded(on, .screenRecording) }
-        .onChange(of: settings.previews) { _, on in requestIfNeeded(on, .screenRecording) }
+        .onChange(of: settings.size) { _, size in requestIfNeeded(size == .large, .screenRecording) }
     }
 
     private func requestIfNeeded(_ on: Bool, _ permission: Permission) {

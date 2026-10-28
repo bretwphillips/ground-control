@@ -46,9 +46,6 @@ final class Settings: ObservableObject {
     @Published var keepClear: Bool {
         didSet { defaults.set(keepClear, forKey: "keepClear") }
     }
-    @Published var previews: Bool {
-        didSet { defaults.set(previews, forKey: "previews") }
-    }
     @Published var flyBy: Bool {
         didSet { defaults.set(flyBy, forKey: "flyBy") }
     }
@@ -73,7 +70,6 @@ final class Settings: ObservableObject {
         size = StripSize(rawValue: defaults.string(forKey: "stripSize") ?? "") ?? .names
         hiddenApps = Set(defaults.stringArray(forKey: "hiddenApps") ?? [])
         keepClear = defaults.object(forKey: "keepClear") as? Bool ?? true
-        previews = defaults.object(forKey: "previews") as? Bool ?? false
         flyBy = defaults.object(forKey: "flyBy") as? Bool ?? true
         flyByPreview = defaults.object(forKey: "flyByPreview") as? Bool ?? true
         flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5

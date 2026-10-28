@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = Settings.shared
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let banners = BannerWatcher()
     /// The gate that was open when a call started, to go back to after.
     private var beforeMeeting: UUID?
+    private var swipeFingers: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let tracker = AppTracker(settings: settings)
@@ -47,6 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         banners.onBanner = { [weak tracker] app, text in tracker?.banner(from: app, text: text) }
         previews.onFinished = { [weak tracker] pid in tracker?.finished(pid: pid) }
         meeting.onChange = { [weak self] live in self?.meetingChanged(live) }
+        let swipes = SwipeWatcher.shared
+        swipes.onSwipe = { [weak strip] step in strip?.gates.step(by: step) }
+        swipeFingers = settings.$swipeFingers.sink { fingers in
+            swipes.fingers = fingers
+            if fingers > 0 { swipes.start() }
+        }
         self.tracker = tracker
         self.previews = previews
         self.strip = strip

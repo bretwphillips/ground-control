@@ -110,6 +110,10 @@ final class Settings: ObservableObject {
     @Published var squishAmount: Double {
         didSet { defaults.set(squishAmount, forKey: "squishAmount") }
     }
+    /// Fingers for a sideways swipe that steps through gates; 0 is off.
+    @Published var swipeFingers: Int {
+        didSet { defaults.set(swipeFingers, forKey: "swipeFingers") }
+    }
     /// Switching to an app that belongs to a gate opens the gate.
     @Published var autoOpen: Bool {
         didSet { defaults.set(autoOpen, forKey: "autoOpen") }
@@ -158,6 +162,7 @@ final class Settings: ObservableObject {
         squish = defaults.object(forKey: "squish") as? Bool ?? true
         squishAmount = defaults.object(forKey: "squishAmount") as? Double ?? 0.25
         autoOpen = defaults.object(forKey: "autoOpen") as? Bool ?? false
+        swipeFingers = defaults.object(forKey: "swipeFingers") as? Int ?? 0
         dismissedPairs = Set(defaults.stringArray(forKey: "dismissedPairs") ?? [])
         shortcuts = defaults.data(forKey: "shortcuts").flatMap { try? JSONDecoder().decode([String: Shortcut].self, from: $0) } ?? [:]
     }

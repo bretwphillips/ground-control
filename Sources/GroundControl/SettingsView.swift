@@ -76,6 +76,28 @@ struct SettingsView: View {
                     Stepper("Grows by \(Int(settings.squishAmount * 100))%", value: $settings.squishAmount, in: 0.1...0.6, step: 0.05)
                 }
                 Toggle("Open an app's gate when you switch to it", isOn: $settings.autoOpen)
+                Picker("Swipe to switch gates", selection: $settings.swipeFingers) {
+                    Text("Off").tag(0)
+                    Text("Four fingers").tag(4)
+                    Text("Five fingers").tag(5)
+                }
+                if settings.swipeFingers == 4, SwipeWatcher.fourFingersTaken {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("macOS also switches desktops with four fingers, so both would happen. In Trackpad → More Gestures, set \"Swipe between full-screen applications\" to three fingers.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Button("Open Trackpad…") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Trackpad-Settings.extension")!)
+                        }
+                        .controlSize(.small)
+                    }
+                } else if settings.swipeFingers > 0 {
+                    Text("Swipe left for the next gate and right for the previous, wrapping around, like moving between desktops.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Text("Moving and resizing windows uses Accessibility.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

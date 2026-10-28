@@ -37,7 +37,6 @@ final class GateEditor {
             $0.activationPolicy == .regular && $0.bundleIdentifier != own && !$0.isHidden
         }
         NSApp.activate()
-        NSApp.hideOtherApplications(nil)
 
         let model = GateEditorModel(name: name, layout: layout)
         let panel = OverlayPanel(frame: runway)
@@ -53,6 +52,24 @@ final class GateEditor {
         panel.makeKeyAndOrderFront(nil)
 
         cancellable = model.$layout.sink { [weak self] layout in self?.scheduleApply(layout) }
+        clearDesktop(attempts: 10)
+    }
+
+    /// Hide Others spares the active app, and activation takes a moment to land, so this waits for
+    /// Ground Control to be active and hides whatever was in front by name too.
+    private func clearDesktop(attempts: Int) {
+        guard panel != nil else { return }
+        if NSApp.isActive || attempts == 0 {
+            NSApp.hideOtherApplications(nil)
+            previousFront?.hide()
+            log.notice("editor: cleared desktop, active: \(NSApp.isActive)")
+            // Apps already in the gate come back.
+            apply(latest)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.clearDesktop(attempts: attempts - 1)
+        }
     }
 
     private func cancel() {

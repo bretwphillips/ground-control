@@ -55,6 +55,19 @@ enum WindowMover {
         AX.set(window, kAXPositionAttribute, AXValueCreate(.cgPoint, &origin))
     }
 
+    /// Whether the app has a window on the desktop in view. The on-screen window list only covers
+    /// the current desktop, so a running, unhidden app missing from it lives on another.
+    static func isOnThisDesktop(_ pid: pid_t) -> Bool {
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return true
+        }
+        return windows.contains { window in
+            window[kCGWindowOwnerPID as String] as? pid_t == pid
+                && window[kCGWindowLayer as String] as? Int == 0
+                && ((window[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) }?.height ?? 0) > 100
+        }
+    }
+
     /// AppKit measures from the bottom-left of the primary screen, AX from its top-left.
     static func axFrame(_ frame: CGRect) -> CGRect {
         CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height)

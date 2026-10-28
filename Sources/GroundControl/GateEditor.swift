@@ -18,6 +18,8 @@ final class GateEditor {
     private var placed: Set<String> = []
     /// Apps asked to open a window this session, so they're only asked once.
     private var opened: Set<String> = []
+    /// Apps whose window was fetched from another desktop this session.
+    private var broughtHere: Set<String> = []
     private var applyPending = false
     private var latest: GateLayout?
     private var model: GateEditorModel?
@@ -98,6 +100,7 @@ final class GateEditor {
         homes = [:]
         placed = []
         opened = []
+        broughtHere = []
         store.editing = false
     }
 
@@ -125,11 +128,26 @@ final class GateEditor {
                 openWindow(id)
                 continue
             }
+            let wasHidden = app.isHidden
             show(app)
             guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
                 // Running with every window closed, like Calendar after ⌘W.
                 log.notice("editor: no window for \(id, privacy: .public)")
                 openWindow(id)
+                continue
+            }
+            // A full-screen window is a desktop of its own and won't take a zone until it leaves.
+            if AX.value(window, "AXFullScreen") == true {
+                AXUIElementSetAttributeValue(window, "AXFullScreen" as CFString, kCFBooleanFalse)
+                log.notice("editor: \(id, privacy: .public) leaving full screen")
+                applyAgain(after: 1)
+                continue
+            }
+            // A just-unhidden app isn't in the on-screen list yet; it's checked on the next pass.
+            if wasHidden {
+                applyAgain(after: 0.4)
+            } else if !WindowMover.isOnThisDesktop(app.processIdentifier) {
+                bringHere(window, id)
                 continue
             }
             let before = WindowMover.frame(of: window)
@@ -143,9 +161,18 @@ final class GateEditor {
                 model?.tooSmall[id] = nil
                 continue
             }
-            if landed.size == before?.size {
-                // Didn't change size at all: it ignores resizing (it manages its own frame), which
-                // says nothing about how small it can go.
+            if landed.size == before?.size, landed.width <= frame.width + 1, landed.height <= frame.height + 1 {
+                // It doesn't resize (Calculator) but fits, so it sits in the middle of its zone.
+                model?.tooSmall[id] = nil
+                WindowMover.setFrame(window, CGRect(
+                    x: frame.midX - landed.width / 2,
+                    y: frame.midY - landed.height / 2,
+                    width: landed.width,
+                    height: landed.height
+                ))
+            } else if landed.size == before?.size {
+                // Didn't change size at all: it ignores resizing, which says nothing about how
+                // small it can go, so nothing is learned.
                 model?.tooSmall[id] = landed.size
             } else if landed.width > frame.width + 1 || landed.height > frame.height + 1 {
                 // Its minimum is bigger than the zone: it keeps the zone's corner, the zone says how
@@ -169,6 +196,26 @@ final class GateEditor {
             }
         }
         placed = ids
+    }
+
+    /// A window on another desktop can be moved but stays there. Minimizing it and bringing it back
+    /// returns it on the desktop in view.
+    private func bringHere(_ window: AXUIElement, _ id: String) {
+        guard !broughtHere.contains(id) else { return }
+        broughtHere.insert(id)
+        log.notice("editor: \(id, privacy: .public) is on another desktop, bringing it here")
+        AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+            self?.applyAgain(after: 0.6)
+        }
+    }
+
+    private func applyAgain(after delay: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            apply(latest)
+        }
     }
 
     /// Opening an app that's already running asks it for a window, as clicking its Dock icon does.

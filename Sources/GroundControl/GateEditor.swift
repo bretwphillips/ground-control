@@ -241,14 +241,23 @@ final class GateEditorModel: ObservableObject {
 
     /// Dropping an app already in the gate moves it.
     func insert(_ id: String, beside target: String, at edge: GateLayout.Edge) {
-        guard id != target, let layout else { return }
-        let without = layout.removing(id) ?? .app(target)
-        let candidate = fit(without.inserting(id, beside: target, at: edge), in: canvas)
+        guard let candidate = inserting(id, beside: target, at: edge) else { return }
         guard fits(candidate, in: canvas) else {
             turnAway(id)
             return
         }
-        self.layout = candidate
+        layout = candidate
+    }
+
+    /// Whether dropping `id` there would leave every window enough room, as far as is known.
+    func wouldFit(_ id: String, beside target: String, at edge: GateLayout.Edge) -> Bool {
+        inserting(id, beside: target, at: edge).map { fits($0, in: canvas) } ?? true
+    }
+
+    private func inserting(_ id: String, beside target: String, at edge: GateLayout.Edge) -> GateLayout? {
+        guard id != target, let layout else { return nil }
+        let without = layout.removing(id) ?? .app(target)
+        return fit(without.inserting(id, beside: target, at: edge), in: canvas)
     }
 
     /// A window refused to shrink past this; the layout makes room for it.
@@ -501,6 +510,7 @@ private struct LeafView: View {
     @ObservedObject var model: GateEditorModel
     let live: Bool
     @State private var target: GateLayout.Edge?
+    @State private var fits = true
 
     var body: some View {
         GeometryReader { proxy in
@@ -526,23 +536,31 @@ private struct LeafView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(.regularMaterial, in: Capsule())
-                .onDrag { NSItemProvider(object: id as NSString) }
+                .onDrag {
+                    DraggedApp.id = id
+                    return NSItemProvider(object: id as NSString)
+                }
                 if let target {
                     highlight(target, in: proxy.size)
                 }
             }
-            .onDrop(of: [.plainText], delegate: EdgeDrop(size: proxy.size, target: $target) { dropped, edge in
-                model.insert(dropped, beside: id, at: edge)
-            })
+            .onDrop(of: [.plainText], delegate: EdgeDrop(
+                size: proxy.size,
+                target: $target,
+                fits: $fits,
+                wouldFit: { model.wouldFit($0, beside: id, at: $1) },
+                onDrop: { model.insert($0, beside: id, at: $1) }
+            ))
         }
         .padding(4)
     }
 
-    /// The half the dropped app will take.
+    /// The half the dropped app will take, red when it wouldn't have room there.
     private func highlight(_ edge: GateLayout.Edge, in size: CGSize) -> some View {
         let horizontal = edge.axis == .columns
         return RoundedRectangle(cornerRadius: 10)
-            .fill(Color.accentColor.opacity(0.3))
+            .fill((fits ? Color.accentColor : .red).opacity(0.3))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(fits ? .clear : .red, lineWidth: 2))
             .frame(width: horizontal ? size.width / 2 : size.width, height: horizontal ? size.height : size.height / 2)
             .frame(
                 maxWidth: .infinity,
@@ -556,10 +574,14 @@ private struct LeafView: View {
 private struct EdgeDrop: DropDelegate {
     let size: CGSize
     @Binding var target: GateLayout.Edge?
+    @Binding var fits: Bool
+    let wouldFit: (String, GateLayout.Edge) -> Bool
     let onDrop: (String, GateLayout.Edge) -> Void
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        target = edge(at: info.location)
+        let edge = edge(at: info.location)
+        target = edge
+        fits = DraggedApp.id.map { wouldFit($0, edge) } ?? true
         return DropProposal(operation: .copy)
     }
 
@@ -582,6 +604,12 @@ private struct EdgeDrop: DropDelegate {
         }
         return dy < 0 ? .top : .bottom
     }
+}
+
+/// The app being dragged. A drag's payload can only be read once it's dropped, so the tiles that
+/// start one note it here for the hover warning.
+enum DraggedApp {
+    static var id: String?
 }
 
 /// Reads the bundle id a dragged app tile carries.

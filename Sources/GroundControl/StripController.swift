@@ -59,6 +59,10 @@ final class StripController {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.tick() }
             .store(in: &cancellables)
+        gateStore.$editing
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.tick() }
+            .store(in: &cancellables)
 
         let workspace = NSWorkspace.shared.notificationCenter
         for event in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
@@ -107,7 +111,7 @@ final class StripController {
             // Full-screen windows can't be resized, so the strip steps aside on their desktops.
             shown = false
         } else {
-            shown = reserves || revealed || !tracker.calling.isEmpty
+            shown = reserves || revealed || !tracker.calling.isEmpty || gates.store.editing
         }
         if shown != panel.isVisible {
             shown ? panel.orderFrontRegardless() : panel.orderOut(nil)

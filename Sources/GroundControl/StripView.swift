@@ -29,6 +29,11 @@ struct StripView: View {
                         calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
                     )
                     .onTapGesture { gateController.open(gate) }
+                    .onDrag {
+                        DraggedGate.id = gate.id
+                        return NSItemProvider(object: "gate:\(gate.id.uuidString)" as NSString)
+                    }
+                    .onDrop(of: [.plainText], delegate: GateReorder(target: gate.id, store: gates))
                     .tileFrame(.gate(gate.id))
                     .contextMenu {
                         Button("Edit Gate…") { gateController.edit(gate) }
@@ -68,6 +73,7 @@ struct StripView: View {
                     .tileFrame(.app(app.id))
                     .onDrag {
                         DraggedApp.id = app.id
+                        DraggedGate.id = nil
                         return NSItemProvider(object: app.id as NSString)
                     }
                     .contextMenu {
@@ -202,6 +208,35 @@ private struct SuggestionTile: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: accept)
         .help("You switch between these two a lot. Click to make them a gate, side by side.")
+    }
+}
+
+/// The gate being dragged along the strip. A drag's payload can only be read once it's dropped,
+/// so the tile that starts one notes it here and the others make room as it passes over them.
+enum DraggedGate {
+    static var id: UUID?
+}
+
+private struct GateReorder: DropDelegate {
+    let target: UUID
+    let store: GateStore
+
+    func validateDrop(info: DropInfo) -> Bool {
+        DraggedGate.id != nil
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let id = DraggedGate.id, id != target else { return }
+        withAnimation(.easeInOut(duration: 0.15)) { store.move(id, to: target) }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        DraggedGate.id = nil
+        return true
     }
 }
 

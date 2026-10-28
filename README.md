@@ -8,9 +8,9 @@ need it, without swiping between desktops.
 
 - **The pattern**: the strip along one edge (top by default) where apps wait, with their Dock badges.
 - **Landing**: click an app in the strip and it comes forward, filling the screen beside the strip.
-- **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and its real
-  window slides into a corner for a few seconds without taking focus. Click it to land that app,
-  or ignore it and it returns to where it was. It waits for a pause in typing, and each app gets
+- **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
+  preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
+  or ignore it and it goes away. Each app gets
   at most one a minute.
 
 Chat apps generally show `•` for plain unreads and a number for mentions and DMs,
@@ -23,8 +23,8 @@ edge, shows badges, switches apps, and pulses a tile when a mention arrives. Eac
 adds to that, and Settings explains what it's for next to the feature that uses it.
 
 - **Accessibility**: the strip keeps its own slice of the screen (windows are kept out from
-  under it), landed apps are sized to fit, and fly-bys move the real window.
-- **Screen Recording**: window previews on the Large strip.
+  under it) and landed apps are sized to fit.
+- **Screen Recording**: window previews on the Large strip, and the live preview in fly-bys.
 
 ## Build and run
 

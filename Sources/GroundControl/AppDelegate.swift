@@ -14,7 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let tracker = AppTracker(settings: settings)
         let previews = Previews(tracker: tracker, settings: settings, permissions: permissions)
         let strip = StripController(tracker: tracker, previews: previews, settings: settings, permissions: permissions)
-        let flyBy = FlyBy(settings: settings, permissions: permissions) { [weak strip] in strip?.runway() }
+        let flyBy = FlyBy(
+            settings: settings,
+            permissions: permissions,
+            runway: { [weak strip] in strip?.runway() },
+            land: { [weak strip] app in strip?.land(app) }
+        )
         tracker.onCall = { [weak flyBy] app, preview in flyBy?.call(app, preview: preview) }
         self.tracker = tracker
         self.previews = previews
@@ -59,6 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Waits a few seconds so there's time to click back into another app first.
     @objc private func previewFlyBy(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
+        if settings.flyByPreview, !permissions.screenRecording {
+            Permission.screenRecording.request()
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let app = self?.tracker?.apps.first(where: { $0.id == id }) else { return }
             self?.tracker?.call(app, preview: true)

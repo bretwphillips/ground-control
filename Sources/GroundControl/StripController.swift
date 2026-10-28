@@ -79,11 +79,10 @@ final class StripController {
     /// windows aside, so it hides until the pointer reaches its edge instead of covering them.
     private var reserves: Bool { settings.keepClear && permissions.accessibility }
 
-    /// Where landed apps go, in AX coordinates.
+    /// Where landed apps go.
     func runway() -> CGRect? {
         guard let screen = NSScreen.screens.first else { return nil }
-        let runway = reserves ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
-        return WindowMover.axFrame(runway)
+        return reserves ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
     }
 
     /// The strip's slice of the screen and the runway left over for the landed app.
@@ -148,11 +147,11 @@ final class StripController {
         WindowMover.clear(WindowMover.axFrame(strip), into: WindowMover.axFrame(runway), pids: pids)
     }
 
-    private func land(_ app: StripApp) {
+    func land(_ app: StripApp) {
         guard permissions.accessibility, let runway = runway() else {
             NSRunningApplication(processIdentifier: app.pid)?.activate()
             return
         }
-        WindowMover.land(app, in: runway)
+        WindowMover.land(app, in: WindowMover.axFrame(runway))
     }
 }

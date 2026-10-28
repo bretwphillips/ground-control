@@ -35,6 +35,9 @@ final class StripController {
 
     private(set) var gates: GateController!
     private var peeks: PeekController!
+    /// Tile frames in the strip window's coordinates, which run down from its top-left.
+    private var tiles: [Peek: CGRect] = [:]
+    private var hovered: Peek?
 
     init(tracker: AppTracker, previews: Previews, settings: Settings, permissions: Permissions, gateStore: GateStore) {
         self.tracker = tracker
@@ -50,7 +53,7 @@ final class StripController {
             gates: gateStore,
             gateController: gates,
             onLand: { [weak self] app in self?.land(app) },
-            onHover: { [weak self] peek, tile in self?.hover(peek, tile: tile) }
+            onTiles: { [weak self] tiles in self?.tiles = tiles }
         )
         panel.contentView = FirstClickHostingView(rootView: view)
 
@@ -85,6 +88,7 @@ final class StripController {
         }
         pointerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.trackPointer()
+            self?.trackHover()
         }
 
         place()
@@ -163,15 +167,28 @@ final class StripController {
         WindowMover.clear(WindowMover.axFrame(strip), into: WindowMover.axFrame(runway), pids: pids)
     }
 
-    /// `tile` is in the strip window's coordinates, which run down from its top-left.
-    private func hover(_ peek: Peek?, tile: CGRect) {
-        guard !gates.store.editing else { return }
+    /// Finds the tile under the pointer and peeks at it.
+    private func trackHover() {
         let frame = panel.frame
-        let onScreen = CGRect(x: frame.minX + tile.minX, y: frame.maxY - tile.maxY, width: tile.width, height: tile.height)
-        peeks.hover(peek, tile: onScreen, strip: frame, edge: settings.edge)
+        let mouse = NSEvent.mouseLocation
+        var found: (Peek, CGRect)?
+        if panel.isVisible, !gates.store.editing, frame.contains(mouse) {
+            for (peek, tile) in tiles {
+                let onScreen = CGRect(x: frame.minX + tile.minX, y: frame.maxY - tile.maxY, width: tile.width, height: tile.height)
+                if onScreen.contains(mouse) {
+                    found = (peek, onScreen)
+                    break
+                }
+            }
+        }
+        guard found?.0 != hovered else { return }
+        hovered = found?.0
+        peeks.hover(found?.0, tile: found?.1 ?? .zero, strip: frame, edge: settings.edge)
     }
 
     func land(_ app: StripApp) {
+        // A single app takes over from whatever gate was open.
+        gates.store.current = nil
         guard permissions.accessibility, let runway = runway() else {
             NSRunningApplication(processIdentifier: app.pid)?.activate()
             return

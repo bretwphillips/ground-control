@@ -7,8 +7,8 @@ struct StripView: View {
     @ObservedObject var gates: GateStore
     let gateController: GateController
     let onLand: (StripApp) -> Void
-    /// The tile under the pointer and where it sits in the strip's window, or nil when it leaves.
-    let onHover: (Peek?, CGRect) -> Void
+    /// Where each tile sits in the strip's window, for finding the one under the pointer.
+    let onTiles: ([Peek: CGRect]) -> Void
 
     var body: some View {
         let horizontal = settings.edge.isHorizontal
@@ -28,7 +28,7 @@ struct StripView: View {
                         calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
                     )
                     .onTapGesture { gateController.open(gate) }
-                    .peek(.gate(gate.id), onHover)
+                    .tileFrame(.gate(gate.id))
                     .contextMenu {
                         Button("Edit Gate…") { gateController.edit(gate) }
                         Divider()
@@ -54,7 +54,7 @@ struct StripView: View {
                         calling: tracker.calling.contains(app.id)
                     )
                     .onTapGesture { onLand(app) }
-                    .peek(.app(app.id), onHover)
+                    .tileFrame(.app(app.id))
                     .onDrag {
                         DraggedApp.id = app.id
                         return NSItemProvider(object: app.id as NSString)
@@ -69,6 +69,7 @@ struct StripView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
+        .onPreferenceChange(TileFrames.self, perform: onTiles)
     }
 }
 
@@ -273,11 +274,20 @@ private struct Badge: View {
     }
 }
 
+/// Hover tracking only runs while Ground Control is the active app, which the strip never is, so
+/// tiles report where they are and the pointer is matched against them instead.
+struct TileFrames: PreferenceKey {
+    static var defaultValue: [Peek: CGRect] = [:]
+
+    static func reduce(value: inout [Peek: CGRect], nextValue: () -> [Peek: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 extension View {
-    /// Reports hovering, with the view's frame in its window, for the peek beside the strip.
-    func peek(_ peek: Peek, _ report: @escaping (Peek?, CGRect) -> Void) -> some View {
+    func tileFrame(_ peek: Peek) -> some View {
         background(GeometryReader { proxy in
-            Color.clear.onHover { inside in report(inside ? peek : nil, proxy.frame(in: .global)) }
+            Color.clear.preference(key: TileFrames.self, value: [peek: proxy.frame(in: .global)])
         })
     }
 }

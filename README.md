@@ -8,11 +8,12 @@ need it, without swiping between desktops.
 
 - **The pattern**: the strip along one edge (top by default) where apps wait, with their Dock badges.
 - **Landing**: click an app in the strip and it comes forward, filling the screen beside the strip.
-- **Gate**: a saved arrangement of windows. Arrange your windows, click **+** in the strip (or
-  Save Windows as Gate… in the menu), and name it. Clicking the gate, or pressing ⌃⌥1 to ⌃⌥9,
-  puts every window back in place at once and brings them forward. Apps in a gate leave the
-  strip's app list; right-click a gate to update it to the current windows, rename or delete it.
-  Positions are kept relative to the space beside the strip, so gates survive strip changes.
+- **Gate**: a saved tiling of apps. Click **+** in the strip (or New Gate… in the menu) to
+  open an empty gate, then drag apps in from the editor's app row or from the strip. Dropping
+  on an edge of an app splits it that way, so columns and rows nest into any pattern; drag the
+  borders to resize, and × removes an app. Clicking a gate, or pressing ⌃⌥1 to ⌃⌥9, puts each
+  app's window in its spot beside the strip and brings them forward, launching any that aren't
+  running. Right-click a gate to edit or delete it. Apps in a gate leave the strip's app list.
 - **Fly-by**: when an app's badge gains a number (a mention or DM), its tile pulses and a live
   preview of its window floats in a corner for a few seconds without taking focus. Click it to land that app,
   or ignore it and it goes away. Each app gets

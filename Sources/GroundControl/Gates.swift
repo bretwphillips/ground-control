@@ -1,35 +1,88 @@
 import AppKit
 
-/// A saved arrangement of windows: the apps that were showing and where.
-struct Gate: Codable, Identifiable, Equatable {
-    struct Spot: Codable, Equatable {
-        var bundleID: String
-        /// The window's frame as fractions of the runway, so a gate survives strip changes.
-        var x, y, width, height: Double
+/// Columns and rows of apps, nested to make any tiling.
+indirect enum GateLayout: Codable, Equatable {
+    case app(String)
+    /// Ratios add up to 1.
+    case split(Axis, [GateLayout], [Double])
 
-        init(bundleID: String, frame: CGRect, runway: CGRect) {
-            let frame = frame.intersection(runway)
-            self.bundleID = bundleID
-            x = (frame.minX - runway.minX) / runway.width
-            y = (frame.minY - runway.minY) / runway.height
-            width = frame.width / runway.width
-            height = frame.height / runway.height
-        }
+    enum Axis: String, Codable {
+        case columns, rows
+    }
 
-        func frame(in runway: CGRect) -> CGRect {
-            CGRect(
-                x: runway.minX + x * runway.width,
-                y: runway.minY + y * runway.height,
-                width: width * runway.width,
-                height: height * runway.height
-            )
+    enum Edge {
+        case left, right, top, bottom
+
+        var axis: Axis { self == .left || self == .right ? .columns : .rows }
+        var leading: Bool { self == .left || self == .top }
+    }
+
+    var leaves: [String] {
+        switch self {
+        case .app(let id): [id]
+        case .split(_, let children, _): children.flatMap(\.leaves)
         }
     }
 
+    /// Each app's frame within `rect`, which has a top-left origin like AX and SwiftUI.
+    func frames(in rect: CGRect) -> [(id: String, frame: CGRect)] {
+        switch self {
+        case .app(let id):
+            return [(id, rect)]
+        case .split(let axis, let children, let ratios):
+            var frames: [(id: String, frame: CGRect)] = []
+            var offset = 0.0
+            for (child, ratio) in zip(children, ratios) {
+                let part = axis == .columns
+                    ? CGRect(x: rect.minX + offset * rect.width, y: rect.minY, width: ratio * rect.width, height: rect.height)
+                    : CGRect(x: rect.minX, y: rect.minY + offset * rect.height, width: rect.width, height: ratio * rect.height)
+                frames += child.frames(in: part)
+                offset += ratio
+            }
+            return frames
+        }
+    }
+
+    func inserting(_ id: String, beside target: String, at edge: Edge) -> GateLayout {
+        switch self {
+        case .app(let leaf) where leaf == target:
+            return .split(edge.axis, edge.leading ? [.app(id), self] : [self, .app(id)], [0.5, 0.5])
+        case .app:
+            return self
+        case .split(let axis, var children, let ratios):
+            // Joining a line of apps running the same way shares its space evenly.
+            if axis == edge.axis, let index = children.firstIndex(of: .app(target)) {
+                children.insert(.app(id), at: edge.leading ? index : index + 1)
+                return .split(axis, children, Array(repeating: 1 / Double(children.count), count: children.count))
+            }
+            return .split(axis, children.map { $0.inserting(id, beside: target, at: edge) }, ratios)
+        }
+    }
+
+    func removing(_ id: String) -> GateLayout? {
+        switch self {
+        case .app(let leaf):
+            return leaf == id ? nil : self
+        case .split(let axis, let children, let ratios):
+            let kept = zip(children, ratios).compactMap { child, ratio in child.removing(id).map { ($0, ratio) } }
+            if kept.count <= 1 { return kept.first?.0 }
+            let total = kept.reduce(0) { $0 + $1.1 }
+            return .split(axis, kept.map(\.0), kept.map { $0.1 / total })
+        }
+    }
+
+    func settingRatios(_ ratios: [Double], at path: ArraySlice<Int>) -> GateLayout {
+        guard case .split(let axis, var children, let current) = self else { return self }
+        guard let index = path.first else { return .split(axis, children, ratios) }
+        children[index] = children[index].settingRatios(ratios, at: path.dropFirst())
+        return .split(axis, children, current)
+    }
+}
+
+struct Gate: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
-    /// Front to back.
-    var spots: [Spot]
+    var layout: GateLayout
 }
 
 final class GateStore: ObservableObject {
@@ -37,7 +90,7 @@ final class GateStore: ObservableObject {
     /// The gate opened last, until another opens.
     @Published var current: UUID?
 
-    private let key = "gates"
+    private let key = "gates.v2"
 
     init() {
         if let data = UserDefaults.standard.data(forKey: key),
@@ -46,29 +99,27 @@ final class GateStore: ObservableObject {
         }
     }
 
-    func add(_ gate: Gate) {
-        gates.append(gate)
-        save()
-    }
-
-    func replace(_ gate: Gate) {
-        guard let index = gates.firstIndex(where: { $0.id == gate.id }) else { return }
-        gates[index] = gate
-        save()
+    func save(_ gate: Gate) {
+        if let index = gates.firstIndex(where: { $0.id == gate.id }) {
+            gates[index] = gate
+        } else {
+            gates.append(gate)
+        }
+        persist()
     }
 
     func delete(_ id: UUID) {
         gates.removeAll { $0.id == id }
         if current == id { current = nil }
-        save()
+        persist()
     }
 
     /// Bundle ids that belong to some gate.
     var bundleIDs: Set<String> {
-        Set(gates.flatMap { $0.spots.map(\.bundleID) })
+        Set(gates.flatMap(\.layout.leaves))
     }
 
-    private func save() {
+    private func persist() {
         if let data = try? JSONEncoder().encode(gates) {
             UserDefaults.standard.set(data, forKey: key)
         }
@@ -79,6 +130,7 @@ final class GateController {
     let store: GateStore
     private let permissions: Permissions
     private let runway: () -> CGRect?
+    private let editor = GateEditor()
 
     init(store: GateStore, permissions: Permissions, runway: @escaping () -> CGRect?) {
         self.store = store
@@ -88,106 +140,59 @@ final class GateController {
 
     func open(_ gate: Gate) {
         store.current = gate.id
-        let runway = runway().map(WindowMover.axFrame)
-        // Back to front, so the gate's front app ends up on top. Each activation brings that app's
-        // main window forward; the short gaps keep macOS from reordering them.
+        guard let runway = runway().map(WindowMover.axFrame) else { return }
+        let frames = gate.layout.frames(in: runway)
+
+        // The app in front keeps focus if it's part of the gate; otherwise the first one gets it.
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let focus = frames.first { $0.id == front }?.id ?? frames.first?.id
+        var order = frames.filter { $0.id != focus }
+        order += frames.filter { $0.id == focus }
+
+        // Each activation brings that app's main window forward; the short gaps keep macOS from
+        // reordering them.
         var delay = 0.0
-        for spot in gate.spots.reversed() {
-            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: spot.bundleID).first else {
-                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: spot.bundleID) {
+        for (id, frame) in order {
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first else {
+                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
                     NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                    place(id, in: frame, attempts: 20)
                 }
                 continue
             }
-            if permissions.accessibility, let runway, let window = WindowMover.mainWindow(of: app.processIdentifier) {
-                WindowMover.setFrame(window, spot.frame(in: runway))
-            }
+            place(id, in: frame, attempts: 1)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { app.activate() }
             delay += 0.04
         }
         log.notice("gate: \(gate.name, privacy: .public)")
     }
 
-    func saveCurrent() {
-        guard let spots = captureSpots(), !spots.isEmpty,
-              let name = ask("Save as Gate", message: "Name this arrangement of windows.", value: "Gate \(store.gates.count + 1)") else {
+    func newGate() {
+        edit(id: UUID(), name: "Gate \(store.gates.count + 1)", layout: nil)
+    }
+
+    func edit(_ gate: Gate) {
+        edit(id: gate.id, name: gate.name, layout: gate.layout)
+    }
+
+    private func edit(id: UUID, name: String, layout: GateLayout?) {
+        guard let runway = runway() else { return }
+        editor.open(id: id, name: name, layout: layout, aspect: runway.width / runway.height) { [weak self] saved in
+            self?.store.save(saved)
+            self?.open(saved)
+        }
+    }
+
+    /// A launching app has no window yet, so placing it is retried until one appears.
+    private func place(_ id: String, in frame: CGRect, attempts: Int) {
+        guard permissions.accessibility, attempts > 0 else { return }
+        if let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
+           let window = WindowMover.mainWindow(of: app.processIdentifier) {
+            WindowMover.setFrame(window, frame)
             return
         }
-        let gate = Gate(name: name, spots: spots)
-        store.add(gate)
-        store.current = gate.id
-    }
-
-    func updateToCurrent(_ gate: Gate) {
-        guard let spots = captureSpots(), !spots.isEmpty else { return }
-        var updated = gate
-        updated.spots = spots
-        store.replace(updated)
-    }
-
-    func rename(_ gate: Gate) {
-        guard let name = ask("Rename Gate", message: "", value: gate.name) else { return }
-        var updated = gate
-        updated.name = name
-        store.replace(updated)
-    }
-
-    /// The apps showing now, front to back, each with its frontmost window. Read from the window
-    /// list, which needs no permission for positions.
-    private func captureSpots() -> [Gate.Spot]? {
-        guard let runway = runway().map(WindowMover.axFrame),
-              let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
-            return nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.place(id, in: frame, attempts: attempts - 1)
         }
-        let own = ProcessInfo.processInfo.processIdentifier
-        var seen = Set<pid_t>()
-        var above: [CGRect] = []
-        var spots: [Gate.Spot] = []
-        for window in info {
-            guard window[kCGWindowLayer as String] as? Int == 0,
-                  let pid = window[kCGWindowOwnerPID as String] as? pid_t, pid != own,
-                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
-                  let frame = CGRect(dictionaryRepresentation: bounds),
-                  frame.width > 100, frame.height > 100 else { continue }
-            defer { above.append(frame) }
-            // Windows mostly hidden behind others aren't part of what the user sees.
-            guard !seen.contains(pid), Self.uncovered(frame, by: above) > 0.15,
-                  let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular,
-                  let id = app.bundleIdentifier else { continue }
-            seen.insert(pid)
-            spots.append(Gate.Spot(bundleID: id, frame: frame, runway: runway))
-        }
-        return spots
-    }
-
-    private static func uncovered(_ frame: CGRect, by above: [CGRect]) -> Double {
-        let steps = 12
-        var open = 0
-        for i in 0..<steps {
-            for j in 0..<steps {
-                let point = CGPoint(
-                    x: frame.minX + (Double(i) + 0.5) * frame.width / Double(steps),
-                    y: frame.minY + (Double(j) + 0.5) * frame.height / Double(steps)
-                )
-                if !above.contains(where: { $0.contains(point) }) { open += 1 }
-            }
-        }
-        return Double(open) / Double(steps * steps)
-    }
-
-    private func ask(_ title: String, message: String, value: String) -> String? {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        let field = NSTextField(string: value)
-        field.frame = NSRect(x: 0, y: 0, width: 240, height: 24)
-        alert.accessoryView = field
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        alert.window.initialFirstResponder = field
-        NSApp.activate()
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
-        let entered = field.stringValue.trimmingCharacters(in: .whitespaces)
-        return entered.isEmpty ? value : entered
     }
 }

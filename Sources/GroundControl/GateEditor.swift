@@ -331,8 +331,9 @@ final class GateEditorModel: ObservableObject {
     /// The runway's size, which the layout's ratios divide.
     private let canvas: CGSize
 
-    /// Space between a window and its zone's edge while editing.
-    static let gap: CGFloat = 6
+    /// Space between a window and its zone's edge while editing. None, so what's built is exactly
+    /// what opens; the overlay above the windows already keeps their edges out of reach.
+    static let gap: CGFloat = 0
     /// The app just dropped, which leaves again if its window turns out not to fit.
     private var lastDrop: (id: String, at: Date)?
 

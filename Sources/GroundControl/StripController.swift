@@ -26,6 +26,7 @@ final class StripController {
     private let panel = StripPanel()
     private let settings: Settings
     private var cancellables = Set<AnyCancellable>()
+    private var timer: Timer?
 
     init(tracker: AppTracker, settings: Settings) {
         self.settings = settings
@@ -41,6 +42,15 @@ final class StripController {
             .sink { [weak self] _ in self?.place() }
             .store(in: &cancellables)
 
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .sink { [weak self] _ in self?.clearStrip() }
+            .store(in: &cancellables)
+        // Polled for new windows and ones dragged under the strip; AX only reports those to an observer per app.
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.clearStrip()
+        }
+
         place()
         panel.orderFrontRegardless()
     }
@@ -55,6 +65,18 @@ final class StripController {
     private func place() {
         guard let strip = split()?.strip else { return }
         panel.setFrame(strip, display: true)
+        clearStrip()
+    }
+
+    /// Keeps every window off the strip so nothing ends up underneath it.
+    private func clearStrip() {
+        // Mid-drag, the user is still placing the window.
+        guard NSEvent.pressedMouseButtons == 0, let (strip, runway) = split() else { return }
+        let own = ProcessInfo.processInfo.processIdentifier
+        let pids = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.processIdentifier != own }
+            .map(\.processIdentifier)
+        WindowMover.clear(WindowMover.axFrame(strip), into: WindowMover.axFrame(runway), pids: pids)
     }
 
     private func land(_ app: StripApp) {

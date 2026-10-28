@@ -33,4 +33,4 @@ old entry and add the new one.
 ## Settings
 
 The airplane in the menu bar sets the strip's edge (top, bottom, left, right) and
-restores apps hidden from the strip (right-click a tile → Hide from Strip).
+picks which apps appear in the strip (or right-click a tile → Hide from Strip). Windows are kept out from under the strip: any window that reaches under it is trimmed to the space beside it.

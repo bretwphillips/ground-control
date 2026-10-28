@@ -136,6 +136,8 @@ final class GateController {
     private var openedAt = Date.distantPast
     /// Where the open gate's windows settled, to notice when one is moved away.
     private var settled: [String: CGRect] = [:]
+    /// Apps asked to reopen while this gate opened, so each is only asked once.
+    private var reopened: Set<String> = []
 
     init(store: GateStore, permissions: Permissions, runway: @escaping () -> CGRect?) {
         self.store = store
@@ -148,6 +150,7 @@ final class GateController {
         store.current = gate.id
         openedAt = Date()
         settled = [:]
+        reopened = []
         guard let runway = runway().map(WindowMover.axFrame) else { return }
         let frames = gate.layout.frames(in: runway)
 
@@ -208,10 +211,23 @@ final class GateController {
         let pid = app.processIdentifier
         guard let window = WindowMover.mainWindow(of: pid) else {
             if let minimized = WindowMover.minimizedWindow(of: pid) {
+                log.notice("gate: restoring \(id, privacy: .public) from the Dock")
                 AXUIElementSetAttributeValue(minimized, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
                 retry(0.5)
             } else if !app.isHidden, WindowMover.hasWindowElsewhere(pid) {
-                log.notice("gate: \(id, privacy: .public) is on another desktop")
+                let all: [AXUIElement] = AX.value(AXUIElementCreateApplication(pid), kAXWindowsAttribute) ?? []
+                log.notice("gate: \(id, privacy: .public) has no window here (\(all.count) visible to Accessibility)")
+                if !reopened.contains(id) {
+                    // Accessibility can miss a minimized window; reopening the app, as a Dock click
+                    // does, restores one. A window on another desktop stays out of reach.
+                    reopened.insert(id)
+                    if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+                        let configuration = NSWorkspace.OpenConfiguration()
+                        configuration.activates = false
+                        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+                    }
+                    retry(0.8)
+                }
             } else {
                 retry(0.5)
             }

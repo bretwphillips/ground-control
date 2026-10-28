@@ -16,11 +16,20 @@ enum WindowMover {
     static func clear(_ strip: CGRect, into runway: CGRect, pids: [pid_t]) {
         for pid in pids {
             for window in standardWindows(of: pid) {
+                // A full-screen window is a desktop of its own and can't be resized; bring it back
+                // to this one. The next pass trims it once the animation ends.
+                if AX.value(window, "AXFullScreen") == true {
+                    let result = AXUIElementSetAttributeValue(window, "AXFullScreen" as CFString, kCFBooleanFalse)
+                    log.notice("pid \(pid): leaving full screen (\(result.rawValue))")
+                    continue
+                }
                 guard let frame = frame(of: window), frame.intersects(strip) else { continue }
                 let kept = frame.intersection(runway)
                 let fits = kept.width >= 200 && kept.height >= 150
                 let size = CGSize(width: min(frame.width, runway.width), height: min(frame.height, runway.height))
-                setFrame(window, fits ? kept : CGRect(origin: runway.origin, size: size))
+                let target = fits ? kept : CGRect(origin: runway.origin, size: size)
+                log.notice("pid \(pid): \(String(describing: frame)) -> \(String(describing: target))")
+                setFrame(window, target)
             }
         }
     }

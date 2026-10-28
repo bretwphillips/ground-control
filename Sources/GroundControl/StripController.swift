@@ -130,6 +130,7 @@ final class StripController {
             if !shown { peeks.hide() }
         }
         if shown, reserves { clearStrip() }
+        gates.checkDrift()
     }
 
     /// Without a reserved slice, pushing the pointer to the screen's edge reveals the strip, and it

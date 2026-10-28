@@ -133,6 +133,9 @@ final class GateController {
     private let permissions: Permissions
     private let runway: () -> CGRect?
     private let editor: GateEditor
+    private var openedAt = Date.distantPast
+    /// Where the open gate's windows settled, to notice when one is moved away.
+    private var settled: [String: CGRect] = [:]
 
     init(store: GateStore, permissions: Permissions, runway: @escaping () -> CGRect?) {
         self.store = store
@@ -143,6 +146,8 @@ final class GateController {
 
     func open(_ gate: Gate) {
         store.current = gate.id
+        openedAt = Date()
+        settled = [:]
         guard let runway = runway().map(WindowMover.axFrame) else { return }
         let frames = gate.layout.frames(in: runway)
 
@@ -163,7 +168,7 @@ final class GateController {
                 }
                 continue
             }
-            place(id, in: frame, attempts: 1)
+            place(id, in: frame, attempts: 6)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { app.activate() }
             delay += 0.04
         }
@@ -186,16 +191,68 @@ final class GateController {
         }
     }
 
-    /// A launching app has no window yet, so placing it is retried until one appears.
+    /// Puts the app's window in its spot: restored from the Dock or taken out of full screen first,
+    /// and retried while a launching app has no window yet. A window on another desktop can't be
+    /// reached and is left there.
     private func place(_ id: String, in frame: CGRect, attempts: Int) {
         guard permissions.accessibility, attempts > 0 else { return }
-        if let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
-           let window = WindowMover.mainWindow(of: app.processIdentifier) {
-            WindowMover.setFrame(window, frame)
+        let retry = { [weak self] (delay: Double) in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                self?.place(id, in: frame, attempts: attempts - 1)
+            }
+        }
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first else {
+            retry(0.5)
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.place(id, in: frame, attempts: attempts - 1)
+        let pid = app.processIdentifier
+        guard let window = WindowMover.mainWindow(of: pid) else {
+            if let minimized = WindowMover.minimizedWindow(of: pid) {
+                AXUIElementSetAttributeValue(minimized, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+                retry(0.5)
+            } else if !app.isHidden, WindowMover.hasWindowElsewhere(pid) {
+                log.notice("gate: \(id, privacy: .public) is on another desktop")
+            } else {
+                retry(0.5)
+            }
+            return
         }
+        if AX.value(window, "AXFullScreen") == true {
+            AXUIElementSetAttributeValue(window, "AXFullScreen" as CFString, kCFBooleanFalse)
+            retry(1.2)
+            return
+        }
+        WindowMover.setFrame(window, frame)
+    }
+
+    /// Lets go of the open gate once one of its windows leaves where it settled: moved, resized,
+    /// minimized, hidden, full screen or closed. Clicking the gate puts it all back.
+    func checkDrift() {
+        guard permissions.accessibility, let id = store.current, Date().timeIntervalSince(openedAt) > 3,
+              let gate = store.gates.first(where: { $0.id == id }) else { return }
+        if settled.isEmpty {
+            // Windows still nowhere to be seen by now (another desktop) don't count.
+            for appID in gate.layout.leaves {
+                settled[appID] = currentFrame(of: appID)
+            }
+            return
+        }
+        for (appID, frame) in settled {
+            guard let current = currentFrame(of: appID),
+                  abs(current.minX - frame.minX) < 8, abs(current.minY - frame.minY) < 8,
+                  abs(current.width - frame.width) < 8, abs(current.height - frame.height) < 8 else {
+                log.notice("gate: let go, \(appID, privacy: .public) moved")
+                store.current = nil
+                settled = [:]
+                return
+            }
+        }
+    }
+
+    private func currentFrame(of id: String) -> CGRect? {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first, !app.isHidden,
+              let window = WindowMover.mainWindow(of: app.processIdentifier),
+              AX.value(window, "AXFullScreen") != true else { return nil }
+        return WindowMover.frame(of: window)
     }
 }

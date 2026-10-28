@@ -50,7 +50,10 @@ struct StripView: View {
                         calling: tracker.calling.contains(app.id)
                     )
                     .onTapGesture { onLand(app) }
-                    .onDrag { NSItemProvider(object: app.id as NSString) }
+                    .onDrag {
+                        DraggedApp.id = app.id
+                        return NSItemProvider(object: app.id as NSString)
+                    }
                     .contextMenu {
                         Button("Hide from Strip") { settings.hiddenApps.insert(app.id) }
                     }

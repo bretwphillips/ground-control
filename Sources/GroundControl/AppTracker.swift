@@ -18,8 +18,7 @@ final class AppTracker: ObservableObject {
     /// Apps whose badge just gained a mention, for as long as their fly-by lasts.
     @Published private(set) var calling: Set<String> = []
 
-    /// A badge gained a mention; `true` when it's a preview from the menu.
-    var onCall: ((StripApp, Bool) -> Void)?
+    var onCall: ((Call) -> Void)?
 
     private let settings: Settings
     private var badges: [pid_t: String] = [:]
@@ -68,12 +67,30 @@ final class AppTracker: ObservableObject {
         apps = allApps.filter { !settings.hiddenApps.contains($0.id) }
     }
 
-    func call(_ app: StripApp, preview: Bool = false) {
-        calling.insert(app.id)
-        onCall?(app, preview)
+    func call(_ call: Call) {
+        let id = call.app.id
+        calling.insert(id)
+        onCall?(call)
         DispatchQueue.main.asyncAfter(deadline: .now() + settings.flyBySeconds) { [weak self] in
-            self?.calling.remove(app.id)
+            self?.calling.remove(id)
         }
+    }
+
+    /// A notification banner appeared. Whether it calls depends on what should trigger a fly-by:
+    /// every notification does, otherwise only urgent ones (badges cover mentions and DMs).
+    func banner(from running: NSRunningApplication, text: String) {
+        guard settings.flyBy, let app = allApps.first(where: { $0.pid == running.processIdentifier }) else { return }
+        let urgent = settings.isUrgent(text)
+        guard urgent || settings.flyByTrigger == .everything else { return }
+        call(Call(app: app, kind: .notification, note: text, urgent: urgent))
+    }
+
+    /// A terminal that was busy has gone quiet.
+    func finished(pid: pid_t) {
+        guard settings.flyBy, settings.terminalFinished,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier != pid,
+              let app = allApps.first(where: { $0.pid == pid }) else { return }
+        call(Call(app: app, kind: .finished, note: "finished"))
     }
 
     private func pollBadges() {
@@ -96,10 +113,14 @@ final class AppTracker: ObservableObject {
         badges = latest
         refresh()
 
-        guard announce, settings.flyBy else { return }
+        guard announce, settings.flyBy, settings.flyByTrigger != .urgent else { return }
         let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        for app in apps where app.pid != front && Badges.mentions(latest[app.pid]) > Badges.mentions(previous[app.pid]) {
-            call(app)
+        for app in apps where app.pid != front {
+            if Badges.mentions(latest[app.pid]) > Badges.mentions(previous[app.pid]) {
+                call(Call(app: app, kind: .mention))
+            } else if settings.flyByTrigger == .everything, latest[app.pid] != nil, previous[app.pid] == nil {
+                call(Call(app: app, kind: .badge))
+            }
         }
     }
 }

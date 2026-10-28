@@ -19,14 +19,24 @@ final class FlyBy {
     private let runway: () -> CGRect?
     private let land: (StripApp) -> Void
     private var flight: Flight?
-    private var queue: [StripApp] = []
+    /// Waiting to fly: in order, with when each arrived, so a held one isn't kept forever.
+    private var queue: [(call: Call, at: Date)] = []
+    private let focus = FocusWatcher()
+    private let meeting: MeetingWatcher
     private var lastFlight: [String: Date] = [:]
     /// The last app that called, preview or not, for answering it from the keyboard.
     private var lastCaller: (app: StripApp, at: Date)?
     private var timer: Timer?
 
-    init(settings: Settings, permissions: Permissions, runway: @escaping () -> CGRect?, land: @escaping (StripApp) -> Void) {
+    init(
+        settings: Settings,
+        permissions: Permissions,
+        meeting: MeetingWatcher,
+        runway: @escaping () -> CGRect?,
+        land: @escaping (StripApp) -> Void
+    ) {
         self.settings = settings
+        self.meeting = meeting
         self.permissions = permissions
         self.runway = runway
         self.land = land
@@ -35,13 +45,32 @@ final class FlyBy {
         }
     }
 
-    func call(_ app: StripApp, preview: Bool) {
+    func call(_ call: Call) {
+        let app = call.app
         lastCaller = (app, Date())
         guard settings.flyByPreview, permissions.screenRecording else { return }
+        // A banner arriving for the fly-by already showing adds its text to it.
+        if flight?.app.id == app.id {
+            if let note = call.note { flight?.panel.model.note = note }
+            return
+        }
+        if let index = queue.firstIndex(where: { $0.call.app.id == app.id }) {
+            if call.note != nil || call.urgent { queue[index].call = call }
+            return
+        }
         // One fly-by a minute per app, so a busy channel can't keep pulling attention away.
-        if !preview, let last = lastFlight[app.id], Date().timeIntervalSince(last) < 60 { return }
-        guard flight?.app.id != app.id, !queue.contains(where: { $0.id == app.id }) else { return }
-        queue.append(app)
+        let preview = call.kind == .preview
+        if !preview, !call.urgent, let last = lastFlight[app.id], Date().timeIntervalSince(last) < 60 { return }
+        queue.append((call, Date()))
+    }
+
+    /// Whether to keep a waiting fly-by back: during a call, or while the user is deep in one app,
+    /// up to the longest wait set. Urgent ones and previews always go.
+    private func holding(_ waiting: (call: Call, at: Date)) -> Bool {
+        guard !waiting.call.urgent, waiting.call.kind != .preview else { return false }
+        if settings.meetingMode, meeting.inMeeting { return true }
+        let waited = Date().timeIntervalSince(waiting.at)
+        return settings.holdWhileFocused && waited < settings.holdMinutes * 60 && focus.isFocused
     }
 
     /// Answers the fly-by from the keyboard, as clicking it would; once it's gone, the last app to
@@ -67,14 +96,15 @@ final class FlyBy {
                     end()
                 }
             }
-        } else if !queue.isEmpty {
-            depart(queue.removeFirst())
+        } else if let index = queue.firstIndex(where: { !holding($0) }) {
+            depart(queue.remove(at: index).call)
         }
     }
 
-    private func depart(_ app: StripApp) {
+    private func depart(_ call: Call) {
+        let app = call.app
         guard let runway = runway() else { return }
-        let panel = FlyByPanel(app: app) { [weak self] in
+        let panel = FlyByPanel(app: app, note: call.note, urgent: call.urgent) { [weak self] in
             self?.land(app)
             self?.end()
         }
@@ -135,6 +165,9 @@ final class FlyBy {
 
 final class FlyByModel: ObservableObject {
     @Published var image: NSImage?
+    /// What it's about: the notification's text, or "finished".
+    @Published var note: String?
+    var urgent = false
 }
 
 final class FlyByPanel: NSPanel {
@@ -142,7 +175,7 @@ final class FlyByPanel: NSPanel {
 
     let model = FlyByModel()
 
-    init(app: StripApp, onClick: @escaping () -> Void) {
+    init(app: StripApp, note: String?, urgent: Bool, onClick: @escaping () -> Void) {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .stationary]
@@ -151,6 +184,8 @@ final class FlyByPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
+        model.note = note
+        model.urgent = urgent
         contentView = FirstClickHostingView(rootView: FlyByView(app: app, model: model, onClick: onClick))
     }
 
@@ -167,11 +202,17 @@ private struct FlyByView: View {
             HStack(spacing: 6) {
                 Image(nsImage: app.icon).resizable().frame(width: 16, height: 16)
                 Text(app.name).font(.system(size: 12, weight: .semibold))
-                if let badge = app.badge {
+                if model.urgent {
+                    Text("urgent").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 5).background(Capsule().fill(.red))
+                }
+                if let note = model.note {
+                    Text(note).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                } else if let badge = app.badge {
                     Text(badge).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text("Click to open").font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text("Click to open").font(.system(size: 11)).foregroundStyle(.secondary).fixedSize()
             }
             .padding(.horizontal, 8)
             .frame(height: FlyByPanel.titleHeight)

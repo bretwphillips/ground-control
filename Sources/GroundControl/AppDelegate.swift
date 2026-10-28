@@ -11,6 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var strip: StripController?
     private var settingsWindow: SettingsWindow?
     private var statusItem: NSStatusItem?
+    private let meeting = MeetingWatcher()
+    private let banners = BannerWatcher()
+    /// The gate that was open when a call started, to go back to after.
+    private var beforeMeeting: UUID?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let tracker = AppTracker(settings: settings)
@@ -35,15 +39,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let flyBy = FlyBy(
             settings: settings,
             permissions: permissions,
+            meeting: meeting,
             runway: { [weak strip] in strip?.runway() },
             land: { [weak strip] app in strip?.bringUp(app) }
         )
-        tracker.onCall = { [weak flyBy] app, preview in flyBy?.call(app, preview: preview) }
+        tracker.onCall = { [weak flyBy] call in flyBy?.call(call) }
+        banners.onBanner = { [weak tracker] app, text in tracker?.banner(from: app, text: text) }
+        previews.onFinished = { [weak tracker] pid in tracker?.finished(pid: pid) }
+        meeting.onChange = { [weak self] live in self?.meetingChanged(live) }
         self.tracker = tracker
         self.previews = previews
         self.strip = strip
         self.flyBy = flyBy
-        settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys)
+        settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gateStore)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "airplane", accessibilityDescription: "Ground Control")
@@ -83,6 +91,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         strip?.gates.newGate()
     }
 
+    /// A call opens the gate chosen for calls, and ending it goes back to the gate from before.
+    private func meetingChanged(_ live: Bool) {
+        guard settings.meetingMode, let gates = strip?.gates,
+              let gate = gateStore.gates.first(where: { $0.id.uuidString == settings.meetingGate }) else { return }
+        if live {
+            beforeMeeting = gateStore.current
+            gates.open(gate)
+        } else if let before = beforeMeeting, let previous = gateStore.gates.first(where: { $0.id == before }) {
+            beforeMeeting = nil
+            gates.open(previous)
+        }
+    }
+
     @objc private func showSettings() {
         settingsWindow?.show()
     }
@@ -95,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let app = self?.tracker?.apps.first(where: { $0.id == id }) else { return }
-            self?.tracker?.call(app, preview: true)
+            self?.tracker?.call(Call(app: app, kind: .preview))
         }
     }
 }

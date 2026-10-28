@@ -7,11 +7,13 @@ final class SettingsWindow {
     private let settings: Settings
     private let permissions: Permissions
     private let hotKeys: HotKeys
+    private let gates: GateStore
 
-    init(settings: Settings, permissions: Permissions, hotKeys: HotKeys) {
+    init(settings: Settings, permissions: Permissions, hotKeys: HotKeys, gates: GateStore) {
         self.settings = settings
         self.permissions = permissions
         self.hotKeys = hotKeys
+        self.gates = gates
     }
 
     func show() {
@@ -24,7 +26,7 @@ final class SettingsWindow {
             )
             window.title = "Ground Control Settings"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, permissions: permissions, hotKeys: hotKeys))
+            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gates))
             window.center()
             self.window = window
         }
@@ -37,6 +39,7 @@ struct SettingsView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var permissions: Permissions
     @ObservedObject var hotKeys: HotKeys
+    @ObservedObject var gates: GateStore
 
     var body: some View {
         Form {
@@ -101,12 +104,25 @@ struct SettingsView: View {
             }
 
             Section("Fly-by") {
-                Toggle("Fly-by when an app's badge shows a number", isOn: $settings.flyBy)
+                Toggle("Fly-by when something needs you", isOn: $settings.flyBy)
                 if settings.flyBy {
-                    Stepper("Stays for \(Int(settings.flyBySeconds)) seconds", value: $settings.flyBySeconds, in: 2...20)
-                    Text("\(settings.shortcut(for: .answer).display) answers it without clicking: it opens the app's gate, or the app on its own. It still works for a minute after the fly-by leaves.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Picker("Fly-by for", selection: $settings.flyByTrigger) {
+                        ForEach(FlyByTrigger.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    TextField("Urgent words and people", text: $settings.urgentWords, prompt: Text("urgent, prod, Jane"))
+                    PermissionNote(
+                        permission: .accessibility,
+                        granted: permissions.accessibility,
+                        reason: "Notifications that mention any of these (comma separated) are urgent: they always fly by, even while you're focused or in a call. Reading notifications uses Accessibility; their text stays on this Mac."
+                    )
+                    Toggle("When a terminal finishes", isOn: $settings.terminalFinished)
+                    if settings.terminalFinished {
+                        PermissionNote(
+                            permission: .screenRecording,
+                            granted: permissions.screenRecording,
+                            reason: "A terminal that was busy for 20 seconds and then goes still flies by, like Claude finishing a task. It's noticed from the window previews, which use Screen Recording."
+                        )
+                    }
                     Toggle("Show a live preview of the app's window", isOn: $settings.flyByPreview)
                     if settings.flyByPreview {
                         PermissionNote(
@@ -115,6 +131,30 @@ struct SettingsView: View {
                             reason: "Uses Screen Recording to show the app's window in a floating preview that never takes focus. Without it, the app's tile pulses in the strip instead."
                         )
                     }
+                    Stepper("Stays for \(Int(settings.flyBySeconds)) seconds", value: $settings.flyBySeconds, in: 2...20)
+                    Text("\(settings.shortcut(for: .answer).display) answers it without clicking: it opens the app's gate, or the app on its own. It still works for a minute after the fly-by leaves.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Holding pattern") {
+                Toggle("Hold fly-bys while you're focused", isOn: $settings.holdWhileFocused)
+                if settings.holdWhileFocused {
+                    Stepper("Hold for at most \(Int(settings.holdMinutes)) min", value: $settings.holdMinutes, in: 1...15)
+                    Text("Focused means you've stayed in one app for two minutes and are typing. Held fly-bys come through when you switch apps, pause, or the time's up.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Toggle("Hold fly-bys during calls", isOn: $settings.meetingMode)
+                if settings.meetingMode {
+                    Picker("Open during calls", selection: $settings.meetingGate) {
+                        Text("Nothing").tag("")
+                        ForEach(gates.gates) { Text($0.name).tag($0.id.uuidString) }
+                    }
+                    Text("A call is your microphone or camera being on. When it ends, the gate from before comes back.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 

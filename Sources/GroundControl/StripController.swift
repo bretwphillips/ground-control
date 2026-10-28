@@ -123,6 +123,7 @@ final class StripController {
                 // Holding ⌃⌥ reveals the strip too, so its keys can be seen.
                 revealedForKeys = showing
                 tick()
+                if settings.autoHide, !revealed { gates.refit() }
                 gates.showWindowHints(showing)
             }
             .store(in: &cancellables)
@@ -145,7 +146,7 @@ final class StripController {
     /// Where landed apps go.
     func runway() -> CGRect? {
         guard let screen = NSScreen.screens.first else { return nil }
-        let reserved = reserves || (settings.autoHide && permissions.accessibility && revealed)
+        let reserved = reserves || (settings.autoHide && permissions.accessibility && (revealed || revealedForKeys))
         return reserved ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
     }
 
@@ -193,8 +194,19 @@ final class StripController {
         case .left: mouse.x <= screen.minX + 2
         case .right: mouse.x >= screen.maxX - 2
         }
-        // The strip plus the gap out to the screen's edge, the menu bar included.
-        let zone = strip.union(screen.divided(atDistance: 1, from: settings.edge.rectEdge).slice).insetBy(dx: -2, dy: -2)
+        // The strip plus the gap out to the screen's edge, the menu bar included. Auto-hidden, it
+        // reaches well past the strip too, so the window buttons and tabs just under it can be
+        // used without it hiding again.
+        var zone = strip.union(screen.divided(atDistance: 1, from: settings.edge.rectEdge).slice).insetBy(dx: -2, dy: -2)
+        if settings.autoHide {
+            let reach: CGFloat = 120
+            zone = switch settings.edge {
+            case .top: CGRect(x: zone.minX, y: zone.minY - reach, width: zone.width, height: zone.height + reach)
+            case .bottom: CGRect(x: zone.minX, y: zone.minY, width: zone.width, height: zone.height + reach)
+            case .left: CGRect(x: zone.minX, y: zone.minY, width: zone.width + reach, height: zone.height)
+            case .right: CGRect(x: zone.minX - reach, y: zone.minY, width: zone.width + reach, height: zone.height)
+            }
+        }
 
         // Auto-hidden, resting on where the strip lives brings it out too, since the apps there
         // move aside for it. A short pause keeps passing over from setting it off.
@@ -203,7 +215,7 @@ final class StripController {
         let hovered = hoverSince.map { Date().timeIntervalSince($0) > 0.15 } ?? false
 
         if atEdge || hovered || (revealed && zone.contains(mouse)) { lastNear = Date() }
-        let shouldReveal = atEdge || hovered || (revealed && Date().timeIntervalSince(lastNear) < 0.4)
+        let shouldReveal = atEdge || hovered || (revealed && Date().timeIntervalSince(lastNear) < 0.3)
         guard shouldReveal != revealed else { return }
         revealed = shouldReveal
         tick()

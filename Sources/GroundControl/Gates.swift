@@ -423,20 +423,6 @@ final class GateController {
         }
     }
 
-    /// Re-lays the open gate into the runway as it is now, after the strip came out or went away,
-    /// without bringing any app forward.
-    func refit() {
-        guard permissions.accessibility, !store.editing, let id = store.current,
-              let gate = store.gates.first(where: { $0.id == id }), let runway = runway().map(WindowMover.axFrame) else { return }
-        shown = layout(of: gate, focus: focus, in: runway)
-        for (app, frame) in shown.map({ windowFrames($0, in: runway) }) ?? [] {
-            place(app, in: frame, attempts: 1)
-        }
-        settled = [:]
-        openedAt = Date().addingTimeInterval(-2.5)
-        refreshSeams()
-    }
-
     /// While ⌃⌥ is held: the next and previous app's keys over their windows in the open gate.
     func showWindowHints(_ showing: Bool) {
         guard showing, permissions.accessibility, !store.editing, let shown,

@@ -81,11 +81,11 @@ struct SettingsView: View {
                     Text("Four fingers").tag(4)
                     Text("Five fingers").tag(5)
                 }
-                if settings.swipeFingers == 4, SwipeWatcher.fourFingersTaken {
+                if settings.swipeFingers > 0 {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("macOS also switches desktops with four fingers, so both would happen. In Trackpad → More Gestures, set \"Swipe between full-screen applications\" to three fingers.")
+                        Text("Swipe left for the next gate and right for the previous, wrapping around. If the swipe also switches desktops, set \"Swipe between full-screen applications\" to other fingers in Trackpad settings.")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                         Button("Open Trackpad…") {
@@ -93,10 +93,6 @@ struct SettingsView: View {
                         }
                         .controlSize(.small)
                     }
-                } else if settings.swipeFingers > 0 {
-                    Text("Swipe left for the next gate and right for the previous, wrapping around, like moving between desktops.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 Text("Moving and resizing windows uses Accessibility.")
                     .font(.caption)

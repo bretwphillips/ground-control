@@ -55,12 +55,6 @@ final class SwipeWatcher {
         let step = x < start ? 1 : -1
         DispatchQueue.main.async { self.onSwipe?(step) }
     }
-
-    /// Whether macOS already uses four-finger side swipes to switch desktops.
-    static var fourFingersTaken: Bool {
-        let value = CFPreferencesCopyAppValue("TrackpadFourFingerHorizSwipeGesture" as CFString, "com.apple.AppleMultitouchTrackpad" as CFString)
-        return (value as? Int) == 2
-    }
 }
 
 fileprivate struct MTPoint {

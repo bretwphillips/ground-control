@@ -7,6 +7,9 @@ final class DesktopController {
     private var hidden: [NSRunningApplication] = []
     private var finderWindows: [AXUIElement] = []
     private var observer: NSObjectProtocol?
+    /// Reopens the gate that was open, with the given app in front, and says whether there was
+    /// one. Set by the gate controller.
+    var reopenGate: ((String?) -> Bool)?
 
     func toggle() {
         showing ? restore() : show()
@@ -43,17 +46,24 @@ final class DesktopController {
         }
     }
 
+    /// Back to where things were: the open gate if there was one, with apps outside it left
+    /// hidden; otherwise everything that was showing. Switching to an app outside the gate brings
+    /// just that app back.
     private func restore(keepFront front: NSRunningApplication? = nil) {
         observer.map(NSWorkspace.shared.notificationCenter.removeObserver)
         observer = nil
-        for app in hidden {
-            setHidden(app, false)
-        }
+        showing = false
         finderWindows.forEach { AXUIElementSetAttributeValue($0, kAXMinimizedAttribute as CFString, kCFBooleanFalse) }
-        front?.activate()
+        if let front {
+            if reopenGate?(front.bundleIdentifier) != true {
+                setHidden(front, false)
+                front.activate()
+            }
+        } else if reopenGate?(nil) != true {
+            hidden.forEach { setHidden($0, false) }
+        }
         hidden = []
         finderWindows = []
-        showing = false
         log.notice("desktop restored")
     }
 

@@ -283,6 +283,17 @@ final class GateController {
         self.settings = settings
         self.runway = runway
         editor = GateEditor(permissions: permissions, store: store)
+        desktop.reopenGate = { [weak self] front in
+            guard let self, let id = store.current, let gate = store.gates.first(where: { $0.id == id }) else { return false }
+            // Switching to an app outside the gate is about that app, not the gate.
+            if let front, !gate.layout.leaves.contains(front) { return false }
+            for id in gate.layout.leaves {
+                guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first else { continue }
+                AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, kCFBooleanFalse)
+            }
+            open(gate, focus: front)
+            return true
+        }
         seams = SeamHandles(
             drag: { [weak self] seam, point in self?.drag(seam, to: point) },
             end: { [weak self] in self?.endDrag() }

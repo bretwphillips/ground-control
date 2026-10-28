@@ -195,6 +195,7 @@ final class FlyByPanel: NSPanel {
 private struct FlyByView: View {
     let app: StripApp
     @ObservedObject var model: FlyByModel
+    @ObservedObject private var keys = KeyHints.shared
     let onClick: () -> Void
 
     var body: some View {
@@ -212,7 +213,12 @@ private struct FlyByView: View {
                     Text(badge).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Text("Click to open").font(.system(size: 11)).foregroundStyle(.secondary).fixedSize()
+                if keys.showing, let key = Settings.shared.hint(.answer) {
+                    KeyCap(text: key)
+                    Text("to open").font(.system(size: 11)).foregroundStyle(.secondary).fixedSize()
+                } else {
+                    Text("Click to open").font(.system(size: 11)).foregroundStyle(.secondary).fixedSize()
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: FlyByPanel.titleHeight)

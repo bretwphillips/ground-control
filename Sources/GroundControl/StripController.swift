@@ -24,22 +24,37 @@ final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
 
 final class StripController {
     private let panel = StripPanel()
+    private let tracker: AppTracker
     private let settings: Settings
+    private let permissions: Permissions
     private var cancellables = Set<AnyCancellable>()
     private var timer: Timer?
+    private var pointerTimer: Timer?
+    private var revealed = false
+    private var lastNear = Date.distantPast
 
-    init(tracker: AppTracker, settings: Settings) {
+    init(tracker: AppTracker, previews: Previews, settings: Settings, permissions: Permissions) {
+        self.tracker = tracker
         self.settings = settings
+        self.permissions = permissions
 
-        let view = StripView(tracker: tracker, settings: settings) { [weak self] app in self?.land(app) }
+        let view = StripView(tracker: tracker, previews: previews, settings: settings) { [weak self] app in
+            self?.land(app)
+        }
         panel.contentView = FirstClickHostingView(rootView: view)
 
-        settings.$edge
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.place() }
-            .store(in: &cancellables)
+        for change in [settings.objectWillChange, permissions.objectWillChange] {
+            change
+                .receive(on: RunLoop.main)
+                .sink { [weak self] _ in self?.place() }
+                .store(in: &cancellables)
+        }
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.place() }
+            .store(in: &cancellables)
+        tracker.$calling
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.tick() }
             .store(in: &cancellables)
 
         let workspace = NSWorkspace.shared.notificationCenter
@@ -53,25 +68,22 @@ final class StripController {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        pointerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.trackPointer()
+        }
 
         place()
     }
 
-    private func tick() {
-        // Full-screen windows can't be resized, so the strip steps aside on their desktops.
-        if Self.frontWindowIsFullScreen() {
-            if panel.isVisible { panel.orderOut(nil) }
-            return
-        }
-        if !panel.isVisible { panel.orderFrontRegardless() }
-        clearStrip()
-    }
+    /// With Accessibility, the strip keeps its slice of the screen clear. Without it, it can't move
+    /// windows aside, so it hides until the pointer reaches its edge instead of covering them.
+    private var reserves: Bool { settings.keepClear && permissions.accessibility }
 
-    private static func frontWindowIsFullScreen() -> Bool {
-        guard let front = NSWorkspace.shared.frontmostApplication else { return false }
-        let app = AXUIElementCreateApplication(front.processIdentifier)
-        guard let window: AXUIElement = AX.value(app, kAXFocusedWindowAttribute) else { return false }
-        return AX.value(window, "AXFullScreen") == true
+    /// Where landed apps go, in AX coordinates.
+    func runway() -> CGRect? {
+        guard let screen = NSScreen.screens.first else { return nil }
+        let runway = reserves ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
+        return WindowMover.axFrame(runway)
     }
 
     /// The strip's slice of the screen and the runway left over for the landed app.
@@ -87,6 +99,44 @@ final class StripController {
         tick()
     }
 
+    private func tick() {
+        let shown: Bool
+        if permissions.accessibility, WindowMover.frontWindow().map({ AX.value($0, "AXFullScreen") == true }) == true {
+            // Full-screen windows can't be resized, so the strip steps aside on their desktops.
+            shown = false
+        } else {
+            shown = reserves || revealed || !tracker.calling.isEmpty
+        }
+        if shown != panel.isVisible {
+            shown ? panel.orderFrontRegardless() : panel.orderOut(nil)
+        }
+        if shown, reserves { clearStrip() }
+    }
+
+    /// Without a reserved slice, pushing the pointer to the screen's edge reveals the strip, and it
+    /// hides again shortly after the pointer leaves it.
+    private func trackPointer() {
+        guard !reserves, let strip = split()?.strip, let screen = NSScreen.screens.first?.frame else {
+            revealed = false
+            return
+        }
+        let mouse = NSEvent.mouseLocation
+        let atEdge = switch settings.edge {
+        case .top: mouse.y >= screen.maxY - 2
+        case .bottom: mouse.y <= screen.minY + 2
+        case .left: mouse.x <= screen.minX + 2
+        case .right: mouse.x >= screen.maxX - 2
+        }
+        // The strip plus the gap out to the screen's edge, the menu bar included.
+        let zone = strip.union(screen.divided(atDistance: 1, from: settings.edge.rectEdge).slice).insetBy(dx: -2, dy: -2)
+
+        if atEdge || (revealed && zone.contains(mouse)) { lastNear = Date() }
+        let shouldReveal = atEdge || (revealed && Date().timeIntervalSince(lastNear) < 0.4)
+        guard shouldReveal != revealed else { return }
+        revealed = shouldReveal
+        tick()
+    }
+
     /// Keeps every window off the strip so nothing ends up underneath it.
     private func clearStrip() {
         // Mid-drag, the user is still placing the window.
@@ -99,7 +149,10 @@ final class StripController {
     }
 
     private func land(_ app: StripApp) {
-        guard let runway = split()?.runway else { return }
-        WindowMover.land(app, in: WindowMover.axFrame(runway))
+        guard permissions.accessibility, let runway = runway() else {
+            NSRunningApplication(processIdentifier: app.pid)?.activate()
+            return
+        }
+        WindowMover.land(app, in: runway)
     }
 }

@@ -16,6 +16,18 @@ enum StripEdge: String, CaseIterable {
     }
 }
 
+enum StripSize: String, CaseIterable {
+    case icons, names, large
+
+    var title: String {
+        switch self {
+        case .icons: "Icons"
+        case .names: "Icons and names"
+        case .large: "Large"
+        }
+    }
+}
+
 final class Settings: ObservableObject {
     static let shared = Settings()
 
@@ -24,16 +36,46 @@ final class Settings: ObservableObject {
     @Published var edge: StripEdge {
         didSet { defaults.set(edge.rawValue, forKey: "stripEdge") }
     }
-
+    @Published var size: StripSize {
+        didSet { defaults.set(size.rawValue, forKey: "stripSize") }
+    }
     /// Bundle ids the user has taken off the strip.
     @Published var hiddenApps: Set<String> {
         didSet { defaults.set(Array(hiddenApps), forKey: "hiddenApps") }
     }
+    @Published var keepClear: Bool {
+        didSet { defaults.set(keepClear, forKey: "keepClear") }
+    }
+    @Published var previews: Bool {
+        didSet { defaults.set(previews, forKey: "previews") }
+    }
+    @Published var flyBy: Bool {
+        didSet { defaults.set(flyBy, forKey: "flyBy") }
+    }
+    @Published var flyByWindow: Bool {
+        didSet { defaults.set(flyByWindow, forKey: "flyByWindow") }
+    }
+    @Published var flyBySeconds: Double {
+        didSet { defaults.set(flyBySeconds, forKey: "flyBySeconds") }
+    }
 
-    let thickness: CGFloat = 32
+    var thickness: CGFloat {
+        switch (size, edge.isHorizontal) {
+        case (.icons, _), (.names, true): 36
+        case (.names, false): 160
+        case (.large, true): 124
+        case (.large, false): 180
+        }
+    }
 
     private init() {
         edge = StripEdge(rawValue: defaults.string(forKey: "stripEdge") ?? "") ?? .top
+        size = StripSize(rawValue: defaults.string(forKey: "stripSize") ?? "") ?? .names
         hiddenApps = Set(defaults.stringArray(forKey: "hiddenApps") ?? [])
+        keepClear = defaults.object(forKey: "keepClear") as? Bool ?? true
+        previews = defaults.object(forKey: "previews") as? Bool ?? false
+        flyBy = defaults.object(forKey: "flyBy") as? Bool ?? true
+        flyByWindow = defaults.object(forKey: "flyByWindow") as? Bool ?? true
+        flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5
     }
 }

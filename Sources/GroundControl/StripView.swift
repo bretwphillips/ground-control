@@ -2,75 +2,115 @@ import SwiftUI
 
 struct StripView: View {
     @ObservedObject var tracker: AppTracker
+    @ObservedObject var previews: Previews
     @ObservedObject var settings: Settings
     let onLand: (StripApp) -> Void
 
     var body: some View {
         let horizontal = settings.edge.isHorizontal
-        let layout = horizontal ? AnyLayout(HStackLayout(spacing: 4)) : AnyLayout(VStackLayout(spacing: 4))
+        let layout = horizontal ? AnyLayout(HStackLayout(spacing: 6)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
 
-        layout {
-            if !tracker.trusted {
-                Button {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                } label: {
-                    Label(horizontal ? "Needs Accessibility access to keep windows clear" : "", systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
-                .help("Open Accessibility settings")
-            }
-            ForEach(tracker.apps) { app in
-                Tile(app: app, landed: app.id == tracker.landed, showName: horizontal)
+        ScrollView(horizontal ? .horizontal : .vertical, showsIndicators: false) {
+            layout {
+                ForEach(tracker.apps) { app in
+                    Tile(
+                        app: app,
+                        size: settings.size,
+                        preview: settings.previews ? previews.images[app.pid] : nil,
+                        landed: app.id == tracker.landed,
+                        calling: tracker.calling.contains(app.id)
+                    )
                     .onTapGesture { onLand(app) }
                     .contextMenu {
                         Button("Hide from Strip") { settings.hiddenApps.insert(app.id) }
                     }
                     .help(app.name)
+                }
             }
-            Spacer(minLength: 0)
+            .padding(5)
         }
-        .padding(4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
     }
 }
 
 private struct Tile: View {
     let app: StripApp
+    let size: StripSize
+    let preview: NSImage?
     let landed: Bool
-    let showName: Bool
+    let calling: Bool
+
+    @State private var pulse = false
 
     var body: some View {
-        HStack(spacing: 5) {
-            Image(nsImage: app.icon)
-                .resizable()
-                .frame(width: 20, height: 20)
-                .overlay(alignment: .topTrailing) { badge }
-            if showName {
-                Text(app.name)
-                    .font(.system(size: 11))
-                    .lineLimit(1)
+        content
+            .padding(.horizontal, size == .icons ? 2 : 5)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 6).fill(landed ? Color.accentColor.opacity(0.25) : .clear))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(.red, lineWidth: calling ? 2 : 0))
+            .scaleEffect(pulse ? 1.08 : 1)
+            .contentShape(Rectangle())
+            .onChange(of: calling) { _, now in
+                if now {
+                    withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true)) { pulse = true }
+                } else {
+                    withAnimation(.easeOut(duration: 0.2)) { pulse = false }
+                }
             }
-        }
-        .padding(.horizontal, showName ? 6 : 2)
-        .frame(height: 24)
-        .background(RoundedRectangle(cornerRadius: 6).fill(landed ? Color.accentColor.opacity(0.25) : .clear))
-        .contentShape(Rectangle())
     }
 
-    @ViewBuilder private var badge: some View {
-        if let label = app.badge, !label.isEmpty {
+    @ViewBuilder private var content: some View {
+        switch size {
+        case .icons:
+            icon(22).overlay(alignment: .topTrailing) { Badge(label: app.badge).offset(x: 6, y: -4) }
+        case .names:
+            HStack(spacing: 5) {
+                icon(20).overlay(alignment: .topTrailing) { Badge(label: app.badge).offset(x: 6, y: -4) }
+                Text(app.name).font(.system(size: 11)).lineLimit(1)
+            }
+            .frame(height: 24)
+        case .large:
+            VStack(spacing: 4) {
+                Group {
+                    if let preview {
+                        Image(nsImage: preview).resizable().aspectRatio(contentMode: .fit)
+                    } else {
+                        icon(44)
+                    }
+                }
+                .frame(width: 150, height: 84)
+                .background(RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.08)))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                HStack(spacing: 4) {
+                    icon(14)
+                    Text(app.name).font(.system(size: 11)).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Badge(label: app.badge)
+                }
+                .frame(width: 150)
+            }
+        }
+    }
+
+    private func icon(_ side: CGFloat) -> some View {
+        Image(nsImage: app.icon).resizable().frame(width: side, height: side)
+    }
+}
+
+private struct Badge: View {
+    let label: String?
+
+    var body: some View {
+        if let label {
             if label == "•" {
-                Circle().fill(.red).frame(width: 6, height: 6).offset(x: 2, y: -2)
+                Circle().fill(.red).frame(width: 6, height: 6)
             } else {
                 Text(label)
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 3)
                     .background(Capsule().fill(.red))
-                    .offset(x: 6, y: -4)
             }
         }
     }

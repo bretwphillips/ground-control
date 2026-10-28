@@ -34,16 +34,24 @@ final class StripController {
     private var lastNear = Date.distantPast
 
     private(set) var gates: GateController!
+    private var peeks: PeekController!
 
     init(tracker: AppTracker, previews: Previews, settings: Settings, permissions: Permissions, gateStore: GateStore) {
         self.tracker = tracker
         self.settings = settings
         self.permissions = permissions
         gates = GateController(store: gateStore, permissions: permissions) { [weak self] in self?.runway() }
+        peeks = PeekController(tracker: tracker, previews: previews, gates: gateStore, settings: settings)
 
-        let view = StripView(tracker: tracker, previews: previews, settings: settings, gates: gateStore, gateController: gates) {
-            [weak self] app in self?.land(app)
-        }
+        let view = StripView(
+            tracker: tracker,
+            previews: previews,
+            settings: settings,
+            gates: gateStore,
+            gateController: gates,
+            onLand: { [weak self] app in self?.land(app) },
+            onHover: { [weak self] peek, tile in self?.hover(peek, tile: tile) }
+        )
         panel.contentView = FirstClickHostingView(rootView: view)
 
         for change in [settings.objectWillChange, permissions.objectWillChange] {
@@ -115,6 +123,7 @@ final class StripController {
         }
         if shown != panel.isVisible {
             shown ? panel.orderFrontRegardless() : panel.orderOut(nil)
+            if !shown { peeks.hide() }
         }
         if shown, reserves { clearStrip() }
     }
@@ -152,6 +161,14 @@ final class StripController {
             .filter { $0.activationPolicy == .regular && $0.processIdentifier != own }
             .map(\.processIdentifier)
         WindowMover.clear(WindowMover.axFrame(strip), into: WindowMover.axFrame(runway), pids: pids)
+    }
+
+    /// `tile` is in the strip window's coordinates, which run down from its top-left.
+    private func hover(_ peek: Peek?, tile: CGRect) {
+        guard !gates.store.editing else { return }
+        let frame = panel.frame
+        let onScreen = CGRect(x: frame.minX + tile.minX, y: frame.maxY - tile.maxY, width: tile.width, height: tile.height)
+        peeks.hover(peek, tile: onScreen, strip: frame, edge: settings.edge)
     }
 
     func land(_ app: StripApp) {

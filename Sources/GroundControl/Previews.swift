@@ -1,7 +1,7 @@
 import AppKit
 import ScreenCaptureKit
 
-/// Small pictures of each app's main window, for the large strip. Needs Screen Recording.
+/// Small pictures of each app's main window, for large tiles and hover peeks. Needs Screen Recording.
 final class Previews: ObservableObject {
     @Published private(set) var images: [pid_t: NSImage] = [:]
 
@@ -21,7 +21,8 @@ final class Previews: ObservableObject {
     }
 
     private func refresh() {
-        guard settings.size == .large, permissions.screenRecording, !busy else { return }
+        // Every size needs them now: the hover peek shows one at any strip size.
+        guard permissions.screenRecording, !busy else { return }
         busy = true
         // Every app, since the strip offers them all while a gate is being built.
         let pids = tracker.allApps.map(\.pid)
@@ -35,7 +36,7 @@ final class Previews: ObservableObject {
                 // A hidden app's likeliest window can refuse capture (VS Code); the next one may not.
                 for window in AppWindows.candidates(of: pid, in: content).prefix(3) {
                     let config = SCStreamConfiguration()
-                    let scale = 300 / window.frame.width
+                    let scale = 640 / window.frame.width
                     config.width = Int(window.frame.width * scale)
                     config.height = Int(window.frame.height * scale)
                     config.showsCursor = false

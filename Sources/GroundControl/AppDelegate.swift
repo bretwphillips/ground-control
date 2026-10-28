@@ -4,7 +4,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = Settings.shared
     private let permissions = Permissions()
     private let gateStore = GateStore()
-    private let hotKeys = HotKeys()
+    private lazy var hotKeys = HotKeys(settings: settings)
     private var tracker: AppTracker?
     private var previews: Previews?
     private var flyBy: FlyBy?
@@ -24,14 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .gate(let index):
                 guard let all = self?.gateStore.gates, index < all.count else { return }
                 gates.open(all[index])
-            case .previousGate:
-                gates.openPrevious()
-            case .stepGate(let step):
-                gates.step(by: step)
-            case .stepApp(let step):
-                gates.stepApp(by: step)
-            case .answerFlyBy:
-                self?.flyBy?.answer()
+            case .named(.back): gates.openPrevious()
+            case .named(.gateLeft): gates.step(by: -1)
+            case .named(.gateRight): gates.step(by: 1)
+            case .named(.appNext): gates.stepApp(by: 1)
+            case .named(.appPrevious): gates.stepApp(by: -1)
+            case .named(.answer): self?.flyBy?.answer()
             }
         }
         let flyBy = FlyBy(
@@ -45,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.previews = previews
         self.strip = strip
         self.flyBy = flyBy
-        settingsWindow = SettingsWindow(settings: settings, permissions: permissions)
+        settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "airplane", accessibilityDescription: "Ground Control")

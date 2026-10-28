@@ -1,14 +1,17 @@
 import AppKit
+import Carbon
 import SwiftUI
 
 final class SettingsWindow {
     private var window: NSWindow?
     private let settings: Settings
     private let permissions: Permissions
+    private let hotKeys: HotKeys
 
-    init(settings: Settings, permissions: Permissions) {
+    init(settings: Settings, permissions: Permissions, hotKeys: HotKeys) {
         self.settings = settings
         self.permissions = permissions
+        self.hotKeys = hotKeys
     }
 
     func show() {
@@ -21,7 +24,7 @@ final class SettingsWindow {
             )
             window.title = "Ground Control Settings"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, permissions: permissions))
+            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, permissions: permissions, hotKeys: hotKeys))
             window.center()
             self.window = window
         }
@@ -33,6 +36,7 @@ final class SettingsWindow {
 struct SettingsView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var permissions: Permissions
+    @ObservedObject var hotKeys: HotKeys
 
     var body: some View {
         Form {
@@ -69,7 +73,29 @@ struct SettingsView: View {
                     Stepper("Grows by \(Int(settings.squishAmount * 100))%", value: $settings.squishAmount, in: 0.1...0.6, step: 0.05)
                 }
                 Toggle("Open an app's gate when you switch to it", isOn: $settings.autoOpen)
-                Text("⌃⌥1 to ⌃⌥9 open gates, ⌃⌥[ and ⌃⌥] step through them, and ⌃⌥Tab flips back to the one before. ⌃⌥` and ⌃⌥⇧` switch apps within the gate. Moving and resizing windows uses Accessibility.")
+                Text("Moving and resizing windows uses Accessibility.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Shortcuts") {
+                ForEach(ShortcutAction.allCases, id: \.self) { action in
+                    LabeledContent(action.title) {
+                        HStack(spacing: 6) {
+                            if hotKeys.taken.contains(action) {
+                                Text("in use by another app").font(.caption).foregroundStyle(.orange)
+                            }
+                            ShortcutRecorder(shortcut: settings.shortcut(for: action), hotKeys: hotKeys) { recorded in
+                                settings.shortcuts[action.rawValue] = recorded
+                            }
+                            if settings.shortcuts[action.rawValue] != nil {
+                                Button("Reset") { settings.shortcuts[action.rawValue] = nil }
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+                Text("⌃⌥1 to ⌃⌥9 open gates by their place in the strip. Click a shortcut and press new keys (with ⌃, ⌥ or ⌘); Delete turns it off, Esc cancels.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -78,7 +104,7 @@ struct SettingsView: View {
                 Toggle("Fly-by when an app's badge shows a number", isOn: $settings.flyBy)
                 if settings.flyBy {
                     Stepper("Stays for \(Int(settings.flyBySeconds)) seconds", value: $settings.flyBySeconds, in: 2...20)
-                    Text("⌃⌥\\ answers it without clicking: it opens the app's gate, or the app on its own. It still works for a minute after the fly-by leaves.")
+                    Text("\(settings.shortcut(for: .answer).display) answers it without clicking: it opens the app's gate, or the app on its own. It still works for a minute after the fly-by leaves.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Toggle("Show a live preview of the app's window", isOn: $settings.flyByPreview)
@@ -156,5 +182,51 @@ private struct PermissionNote: View {
                     .controlSize(.small)
             }
         }
+    }
+}
+
+/// Click, then press the new keys.
+private struct ShortcutRecorder: View {
+    let shortcut: Shortcut
+    let hotKeys: HotKeys
+    let set: (Shortcut) -> Void
+
+    @State private var recording = false
+    @State private var monitor: Any?
+
+    var body: some View {
+        Button(recording ? "Press keys…" : shortcut.display) {
+            recording ? stop() : start()
+        }
+        .controlSize(.small)
+        .frame(minWidth: 90)
+        .onDisappear(perform: stop)
+    }
+
+    private func start() {
+        recording = true
+        hotKeys.paused = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            switch Int(event.keyCode) {
+            case kVK_Escape:
+                stop()
+            case kVK_Delete, kVK_ForwardDelete:
+                set(.none)
+                stop()
+            default:
+                guard let recorded = Shortcut(event: event) else { return nil }
+                set(recorded)
+                stop()
+            }
+            return nil
+        }
+    }
+
+    private func stop() {
+        guard recording else { return }
+        recording = false
+        hotKeys.paused = false
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
     }
 }

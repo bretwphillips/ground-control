@@ -20,6 +20,8 @@ final class GateEditor {
     private var opened: Set<String> = []
     /// Apps whose window was fetched from another desktop this session.
     private var broughtHere: Set<String> = []
+    /// Finder windows minimized for the empty desktop, restored after.
+    private var finderWindows: [AXUIElement] = []
     private var applyPending = false
     private var latest: GateLayout?
     private var model: GateEditorModel?
@@ -37,9 +39,12 @@ final class GateEditor {
         // An empty desktop to build on; the gate's own apps reappear as they're placed.
         let own = Bundle.main.bundleIdentifier
         previousFront = NSWorkspace.shared.frontmostApplication
+        // Finder stays: something has to be the active app, and with everything hidden macOS
+        // passes focus to the next app, un-hiding it. Its windows are minimized instead.
         hiddenByUs = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && $0.bundleIdentifier != own && !$0.isHidden
+            $0.activationPolicy == .regular && $0.bundleIdentifier != own && $0.bundleIdentifier != Self.finder && !$0.isHidden
         }
+        minimizeFinderWindows()
 
         let model = GateEditorModel(name: name, layout: layout, canvas: runway.size)
         self.model = model
@@ -80,6 +85,20 @@ final class GateEditor {
         }
     }
 
+    private static let finder = "com.apple.finder"
+
+    private func minimizeFinderWindows() {
+        guard permissions.accessibility,
+              let finder = NSRunningApplication.runningApplications(withBundleIdentifier: Self.finder).first else { return }
+        let windows: [AXUIElement] = AX.value(AXUIElementCreateApplication(finder.processIdentifier), kAXWindowsAttribute) ?? []
+        finderWindows = windows.filter {
+            AX.value($0, kAXSubroleAttribute) == kAXStandardWindowSubrole && AX.value($0, kAXMinimizedAttribute) != true
+        }
+        for window in finderWindows {
+            AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+
     private func cancel() {
         for (window, frame) in homes.values {
             WindowMover.setFrame(window, frame)
@@ -94,8 +113,12 @@ final class GateEditor {
         model = nil
         panel?.orderOut(nil)
         panel = nil
-        hiddenByUs.forEach { $0.unhide() }
+        hiddenByUs.forEach(show)
         hiddenByUs = []
+        for window in finderWindows {
+            AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        }
+        finderWindows = []
         previousFront = nil
         homes = [:]
         placed = []
@@ -118,7 +141,8 @@ final class GateEditor {
 
     private func apply(_ layout: GateLayout?) {
         guard panel != nil else { return }
-        let frames = layout?.frames(in: WindowMover.axFrame(runway)) ?? []
+        // A small gap between windows keeps the borders between them easy to grab.
+        let frames = (layout?.frames(in: WindowMover.axFrame(runway)) ?? []).map { (id: $0.id, frame: $0.frame.insetBy(dx: 6, dy: 6)) }
         let ids = Set(frames.map(\.id))
         for id in placed.subtracting(ids) {
             running(id).map(hide)
@@ -140,16 +164,24 @@ final class GateEditor {
             if AX.value(window, "AXFullScreen") == true {
                 AXUIElementSetAttributeValue(window, "AXFullScreen" as CFString, kCFBooleanFalse)
                 log.notice("editor: \(id, privacy: .public) leaving full screen")
+                // The animation's length varies, so it's placed more than once.
                 applyAgain(after: 1)
+                applyAgain(after: 2.5)
                 continue
             }
             // A just-unhidden app isn't in the on-screen list yet; it's checked on the next pass.
             if wasHidden {
                 applyAgain(after: 0.4)
             } else if !WindowMover.isOnThisDesktop(app.processIdentifier) {
-                bringHere(window, id)
+                if broughtHere.contains(id) {
+                    // Minimizing and restoring didn't bring it over; only the user can move it.
+                    model?.elsewhere.insert(id)
+                } else {
+                    bringHere(window, id)
+                }
                 continue
             }
+            model?.elsewhere.remove(id)
             let before = WindowMover.frame(of: window)
             if homes[id] == nil, let before {
                 homes[id] = (window, before)
@@ -303,6 +335,8 @@ final class GateEditorModel: ObservableObject {
     @Published var tooSmall: [String: CGSize] = [:]
     /// Why the last drop was turned away, shown for a few seconds.
     @Published var notice: String?
+    /// Apps whose window is on another desktop, out of reach.
+    @Published var elsewhere: Set<String> = []
     /// The smallest each app's window has allowed, learned as it refuses and kept between gates;
     /// borders stop there and new splits make room for it.
     private(set) var minimums: [String: CGSize]
@@ -440,6 +474,8 @@ private struct GateOverlay: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // Catches every click, so windows underneath can't be resized by accident.
+            Color.black.opacity(0.001)
             Group {
                 if let layout = model.layout {
                     NodeView(node: layout, path: [], model: model, live: live)
@@ -621,6 +657,10 @@ private struct LeafView: View {
                         Text("needs \(Int(needs.width))×\(Int(needs.height))")
                             .font(.system(size: 11))
                             .foregroundStyle(.orange)
+                    } else if model.elsewhere.contains(id) {
+                        Text("on another desktop: move it here in Mission Control")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
                     }
                     Button { model.remove(id) } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
@@ -647,7 +687,7 @@ private struct LeafView: View {
                 onDrop: { model.insert($0, beside: id, at: $1) }
             ))
         }
-        .padding(4)
+        .padding(6)
     }
 
     /// The half the dropped app will take, red when it wouldn't have room there.

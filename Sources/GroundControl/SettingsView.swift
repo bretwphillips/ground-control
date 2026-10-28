@@ -70,12 +70,12 @@ struct SettingsView: View {
                 Toggle("Fly-by when an app's badge shows a number", isOn: $settings.flyBy)
                 if settings.flyBy {
                     Stepper("Stays for \(Int(settings.flyBySeconds)) seconds", value: $settings.flyBySeconds, in: 2...20)
-                    Toggle("Bring the app's window into view", isOn: $settings.flyByWindow)
-                    if settings.flyByWindow {
+                    Toggle("Show a live preview of the app's window", isOn: $settings.flyByPreview)
+                    if settings.flyByPreview {
                         PermissionNote(
-                            permission: .accessibility,
-                            granted: permissions.accessibility,
-                            reason: "Uses Accessibility to slide the app's window into a corner without taking focus. Without it, the app's tile pulses in the strip instead."
+                            permission: .screenRecording,
+                            granted: permissions.screenRecording,
+                            reason: "Uses Screen Recording to show the app's window in a floating preview that never takes focus. Without it, the app's tile pulses in the strip instead."
                         )
                     }
                 }
@@ -99,7 +99,7 @@ struct SettingsView: View {
         .frame(width: 480)
         .frame(minHeight: 620)
         .onChange(of: settings.keepClear) { _, on in requestIfNeeded(on, .accessibility) }
-        .onChange(of: settings.flyByWindow) { _, on in requestIfNeeded(on, .accessibility) }
+        .onChange(of: settings.flyByPreview) { _, on in requestIfNeeded(on, .screenRecording) }
         .onChange(of: settings.previews) { _, on in requestIfNeeded(on, .screenRecording) }
     }
 

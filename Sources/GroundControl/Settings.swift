@@ -52,8 +52,8 @@ final class Settings: ObservableObject {
     @Published var flyBy: Bool {
         didSet { defaults.set(flyBy, forKey: "flyBy") }
     }
-    @Published var flyByWindow: Bool {
-        didSet { defaults.set(flyByWindow, forKey: "flyByWindow") }
+    @Published var flyByPreview: Bool {
+        didSet { defaults.set(flyByPreview, forKey: "flyByPreview") }
     }
     @Published var flyBySeconds: Double {
         didSet { defaults.set(flyBySeconds, forKey: "flyBySeconds") }
@@ -75,7 +75,7 @@ final class Settings: ObservableObject {
         keepClear = defaults.object(forKey: "keepClear") as? Bool ?? true
         previews = defaults.object(forKey: "previews") as? Bool ?? false
         flyBy = defaults.object(forKey: "flyBy") as? Bool ?? true
-        flyByWindow = defaults.object(forKey: "flyByWindow") as? Bool ?? true
+        flyByPreview = defaults.object(forKey: "flyByPreview") as? Bool ?? true
         flyBySeconds = defaults.object(forKey: "flyBySeconds") as? Double ?? 5
     }
 }

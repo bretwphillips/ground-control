@@ -60,10 +60,6 @@ enum WindowMover {
         CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height)
     }
 
-    static func axPoint(_ point: CGPoint) -> CGPoint {
-        CGPoint(x: point.x, y: primaryHeight - point.y)
-    }
-
     private static var primaryHeight: CGFloat { NSScreen.screens.first?.frame.height ?? 0 }
 
     private static func standardWindows(of pid: pid_t) -> [AXUIElement] {

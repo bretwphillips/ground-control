@@ -41,7 +41,7 @@ struct StripView: View {
                     Divider().frame(width: horizontal ? nil : 40, height: horizontal ? 24 : nil)
                 }
                 // While a gate is being built every app is offered, including ones in other gates.
-                ForEach(tracker.apps.filter { gates.editing || !gated.contains($0.id) }) { app in
+                ForEach(gates.editing ? tracker.allApps : tracker.apps.filter { !gated.contains($0.id) }) { app in
                     Tile(
                         app: app,
                         size: settings.size,

@@ -302,10 +302,16 @@ final class GateController {
 
     private var gap: CGFloat { CGFloat(settings.gateGap) }
 
-    /// Where each window goes: its share of the runway, with `gap` around and between them so the
-    /// tray behind shows through.
+    /// The layout's area: the runway grown by half a gap, so after each window gives up half a gap
+    /// on every side the outer ones still meet the runway's edges.
+    private func layoutArea(_ runway: CGRect) -> CGRect {
+        runway.insetBy(dx: -gap / 2, dy: -gap / 2)
+    }
+
+    /// Where each window goes: its share of the runway, with `gap` between neighbours (but not
+    /// around the outside) so the tray behind shows through.
     private func windowFrames(_ layout: GateLayout, in runway: CGRect) -> [(id: String, frame: CGRect)] {
-        layout.frames(in: runway.insetBy(dx: gap / 2, dy: gap / 2)).map { (id: $0.id, frame: $0.frame.insetBy(dx: gap / 2, dy: gap / 2)) }
+        layout.frames(in: layoutArea(runway)).map { (id: $0.id, frame: $0.frame.insetBy(dx: gap / 2, dy: gap / 2)) }
     }
 
     /// While a gate is open: the tray behind it, and, while one of its apps is in front, handles on
@@ -323,14 +329,14 @@ final class GateController {
             seams.show([], gap: gap, locks: [], tray: nil)
             return
         }
-        let edge = gap + 6
+        let edge: CGFloat = 6
         let locks = [
             CGRect(x: runway.minX, y: runway.minY, width: edge, height: runway.height),
             CGRect(x: runway.maxX - edge, y: runway.minY, width: edge, height: runway.height),
             CGRect(x: runway.minX, y: runway.minY, width: runway.width, height: edge),
             CGRect(x: runway.minX, y: runway.maxY - edge, width: runway.width, height: edge),
         ]
-        seams.show(shown.seams(in: runway.insetBy(dx: gap / 2, dy: gap / 2)), gap: gap, locks: locks, tray: runway)
+        seams.show(shown.seams(in: layoutArea(runway)), gap: gap, locks: locks, tray: runway)
     }
 
     /// Moves a seam to the pointer, resizing the windows on both sides together.
@@ -350,7 +356,7 @@ final class GateController {
         updated[seam.index - 1] = min(max(position / length - before, floorA), pair - floorB)
         updated[seam.index] = pair - updated[seam.index - 1]
         self.shown = (dragBase ?? shown).settingRatios(updated, at: seam.path[...])
-        seams.move(self.shown?.seams(in: runway.insetBy(dx: gap / 2, dy: gap / 2)) ?? [], gap: gap)
+        seams.move(self.shown?.seams(in: layoutArea(runway)) ?? [], gap: gap)
 
         // Windows follow at most every 50ms; some apps redraw slowly.
         guard !dragPending else { return }

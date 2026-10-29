@@ -413,7 +413,7 @@ final class GateController {
             focus = front
             let frames = shown.map { windowFrames($0, in: runway) } ?? []
             // A cross-fade over the resize: the windows jump underneath while the old view fades.
-            Transition.shared.run(direction: 0) { [weak self] in
+            Transition.shared.run(direction: 0, squish: true) { [weak self] in
                 for (id, frame) in frames {
                     self?.place(id, in: frame, attempts: 1)
                 }

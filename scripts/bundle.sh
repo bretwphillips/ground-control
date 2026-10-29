@@ -7,9 +7,10 @@ swift build -c release
 
 app="build/Ground Control.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp .build/release/GroundControl "$app/Contents/MacOS/"
 cp Resources/Info.plist "$app/Contents/"
+cp Resources/AppIcon.icns "$app/Contents/Resources/"
 # Signed with scripts/make-cert.sh's identity when it exists, so the Accessibility grant survives rebuilds.
 identity="Ground Control Dev"
 security find-certificate -c "$identity" >/dev/null 2>&1 || identity="-"

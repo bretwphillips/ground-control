@@ -412,13 +412,13 @@ final class GateController {
             shown = layout(of: current, focus: front, in: runway)
             focus = front
             // The windows grow and shrink into place, so the change can be seen.
-            let moves = (shown.map { windowFrames($0, in: runway) } ?? []).compactMap { id, frame -> WindowAnimator.Move? in
+            let moves = (shown.map { windowFrames($0, in: runway) } ?? []).compactMap { id, frame -> StretchSquish.Move? in
                 guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
                       let window = WindowMover.mainWindow(of: app.processIdentifier),
                       let from = WindowMover.frame(of: window) else { return nil }
-                return WindowAnimator.Move(window: window, from: from, to: frame)
+                return StretchSquish.Move(pid: app.processIdentifier, window: window, from: from, to: frame)
             }
-            WindowAnimator.shared.animate(moves, duration: settings.switchSpeed.squishDuration ?? 0) { [weak self] in
+            StretchSquish.shared.run(moves, duration: settings.switchSpeed.squishDuration ?? 0) { [weak self] in
                 self?.refreshSeams()
             }
             // The new arrangement is where the windows belong now.

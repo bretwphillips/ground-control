@@ -135,17 +135,19 @@ final class StretchSquish {
             panel.orderFrontRegardless()
 
             moves.forEach { WindowMover.setFrame($0.window, $0.to) }
+            // The pictures stay solid for the first third of the stretch, then fade into the real
+            // windows (already at their new sizes underneath) as it finishes.
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration / 3) { [panel] in
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = duration * 2 / 3
+                    context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                    panel.animator().alphaValue = 0
+                }
+            }
             await NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 for (view, to) in views { view.animator().frame = to }
-            }
-            // The stretched pictures fade into the real windows, whose crisp text and edges don't
-            // quite match them, instead of vanishing at once.
-            await NSAnimationContext.runAnimationGroup { context in
-                context.duration = duration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().alphaValue = 0
             }
             panel.orderOut(nil)
             panel.contentView = nil

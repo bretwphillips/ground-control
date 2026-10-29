@@ -219,8 +219,12 @@ final class GateStore: ObservableObject {
     @Published var current: UUID? {
         didSet {
             if let oldValue, oldValue != current { previous = oldValue }
+            UserDefaults.standard.set(current?.uuidString, forKey: "currentGate")
         }
     }
+    /// The gate that was open when Ground Control last quit, to pick up again if its windows are
+    /// still where it put them.
+    let lastOpen = UserDefaults.standard.string(forKey: "currentGate").flatMap(UUID.init(uuidString:))
     /// The gate open before the current one, for flipping back and forth.
     private(set) var previous: UUID?
     /// A gate is being built over the runway.
@@ -620,6 +624,32 @@ final class GateController {
             return
         }
         WindowMover.setFrame(window, frame)
+    }
+
+    /// After a restart, the gate that was open is marked open again if its windows are still where
+    /// it puts them (with or without squish), so seams, squish and the highlight carry on.
+    func resume() {
+        guard permissions.accessibility, store.current == nil, let id = store.lastOpen,
+              let gate = store.gates.first(where: { $0.id == id }), let runway = runway().map(WindowMover.axFrame) else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let candidates = [layout(of: gate, focus: front, in: runway), gate.layout]
+        guard let match = candidates.first(where: { layout in
+            windowFrames(layout, in: runway).allSatisfy { id, frame in
+                guard let current = currentFrame(of: id) else { return false }
+                return abs(current.minX - frame.minX) < 12 && abs(current.minY - frame.minY) < 12
+                    && abs(current.width - frame.width) < 12 && abs(current.height - frame.height) < 12
+            }
+        }) else {
+            log.notice("resume: \(gate.name, privacy: .public) no longer matches the windows")
+            return
+        }
+        store.current = gate.id
+        shown = match
+        focus = gate.layout.leaves.contains(front ?? "") ? front : nil
+        settled = [:]
+        openedAt = Date().addingTimeInterval(-2.5)
+        refreshSeams()
+        log.notice("resume: \(gate.name, privacy: .public) is still open")
     }
 
     /// Lets go of the open gate once one of its windows leaves where it settled: moved, resized,

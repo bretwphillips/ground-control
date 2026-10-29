@@ -66,6 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.previews = previews
         self.strip = strip
         self.flyBy = flyBy
+        // Give windows a moment to be found before checking the last gate still matches them.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak strip] in strip?.gates.resume() }
         settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gateStore, updates: updates)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)

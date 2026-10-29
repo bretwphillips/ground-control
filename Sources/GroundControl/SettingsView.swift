@@ -235,10 +235,8 @@ struct SettingsView: View {
     private var swipeNote: String {
         let swipe = "Swipe left for the next gate, right for the previous."
         switch settings.swipeFingers {
-        case 3:
-            return swipe + " macOS uses three fingers too, so in Trackpad → More Gestures set \"Swipe between pages\" to two fingers or off, and \"Swipe between full-screen applications\" to four fingers or off. Otherwise both happen."
-        case 4:
-            return swipe + " macOS may use four fingers too: in Trackpad → More Gestures, set \"Swipe between full-screen applications\" to three fingers or off. Otherwise both happen."
+        case 3, 4:
+            return swipe + " On a single desktop this usually works as it is. With more desktops or full-screen apps, macOS would switch those too: in Trackpad → More Gestures, give \"Swipe between full-screen applications\" other fingers or turn it off\(settings.swipeFingers == 3 ? ", and keep \"Swipe between pages\" on two fingers" : "")."
         default:
             return swipe + " macOS doesn't use five-finger swipes, so nothing needs changing."
         }

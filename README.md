@@ -4,6 +4,17 @@ A macOS menu bar app for working on one screen. Instead of swiping between deskt
 use sit together in **gates** you build yourself, everything else circles in your **airspace**
 along one edge, and what needs you flies by without taking your focus.
 
+## Why
+
+On one screen, every app you use is either covering another or a desktop swipe away. The usual
+fixes trade one problem for another: full-screen apps mean swiping between desktops all day, and
+tiling everything leaves each app too small to use. Meanwhile chat apps pull your focus whether
+the message matters or not.
+
+Ground Control keeps the apps you're working with arranged together, everything else one glance
+away, and only lets interruptions through when they're worth it: a mention that's urgent, a build
+or Claude task that's finished, never in the middle of a sentence or a call.
+
 ## What it does
 
 - **Airspace**: the apps you're not looking at, circling along one edge (top by default) until
@@ -57,7 +68,8 @@ Settings says what it's for next to the feature that uses it.
 
 ## Install
 
-Requires macOS 14 or later and the Swift toolchain (Xcode or the Command Line Tools).
+Requires macOS 14 or later and Apple's Swift tools. If you don't have Xcode, the Command Line
+Tools are enough: run `xcode-select --install` and follow the prompt.
 
 ```sh
 git clone https://github.com/bretwphillips/ground-control.git

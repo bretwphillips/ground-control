@@ -34,6 +34,9 @@ final class StripController {
     private var revealedForKeys = false
     private var flashUntil = Date.distantPast
     private var hoverSince: Date?
+    /// The last click anywhere. Clicks under the hidden airspace are work in the app there.
+    private var lastClick = Date.distantPast
+    private var clickMonitor: Any?
     private var lastNear = Date.distantPast
 
     private(set) var gates: GateController!
@@ -127,6 +130,11 @@ final class StripController {
             }
             .store(in: &cancellables)
 
+        // Mouse clicks elsewhere can be watched without a permission; only keys need one.
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.lastClick = Date()
+        }
+
         place()
     }
 
@@ -198,7 +206,11 @@ final class StripController {
         // Auto-hidden, resting on where the strip lives brings it out too. The pause is long enough
         // to click a window's buttons or tabs underneath without it appearing.
         let resting = settings.autoHide && strip.contains(mouse)
-        hoverSince = resting ? hoverSince ?? Date() : nil
+        // Clicking there (closing tabs, say) is using the app underneath, so each click starts the
+        // wait over, and it comes out only after a second without one.
+        if NSEvent.pressedMouseButtons != 0 { lastClick = Date() }
+        let clicking = Date().timeIntervalSince(lastClick) < 1
+        hoverSince = resting && !clicking ? hoverSince ?? Date() : nil
         let hovered = hoverSince.map { Date().timeIntervalSince($0) > 0.6 } ?? false
 
         if atEdge || hovered || (revealed && zone.contains(mouse)) { lastNear = Date() }

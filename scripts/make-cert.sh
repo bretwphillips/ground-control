@@ -24,3 +24,8 @@ fi
 security find-certificate -c "$name" -p > "$dir/cert.pem"
 security add-trusted-cert -r trustRoot -p codeSign -k "$keychain" "$dir/cert.pem"
 echo "\"$name\" is trusted for code signing"
+
+# Lets codesign use the key without asking on every build ("Always Allow" alone doesn't stick).
+# Asks for your login password once.
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s "$keychain" >/dev/null
+echo "codesign can use it without asking"

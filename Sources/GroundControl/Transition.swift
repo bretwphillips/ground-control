@@ -130,6 +130,7 @@ final class StretchSquish {
                 views.append((view, move.to))
             }
             panel.contentView = canvas
+            panel.alphaValue = 1
             panel.setFrame(screen.frame, display: true)
             panel.orderFrontRegardless()
 
@@ -138,6 +139,13 @@ final class StretchSquish {
                 context.duration = duration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 for (view, to) in views { view.animator().frame = to }
+            }
+            // The stretched pictures fade into the real windows, whose crisp text and edges don't
+            // quite match them, instead of vanishing at once.
+            await NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().alphaValue = 0
             }
             panel.orderOut(nil)
             panel.contentView = nil

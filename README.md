@@ -1,17 +1,17 @@
 # Ground Control
 
 A macOS menu bar app for working on one screen. Instead of swiping between desktops, the apps you
-use sit together in **gates** you build yourself, everything else waits in a thin strip along one
-edge, and what needs you flies by without taking your focus.
+use sit together in **gates** you build yourself, everything else circles in your **airspace**
+along one edge, and what needs you flies by without taking your focus.
 
 ## What it does
 
-- **The strip**: the apps you're not looking at, along one edge (top by default), with their Dock
-  badges coloured and shaped by urgency: **!** red for urgent, a number in orange for mentions and
+- **Airspace**: the apps you're not looking at, circling along one edge (top by default) until
+  they're needed, with their Dock badges coloured and shaped by urgency: **!** red for urgent, a number in orange for mentions and
   DMs, ✓ green for a terminal that finished, a blue dot for plain unreads. Hover a tile for a larger
   preview. It can hide until you need it.
-- **Gates**: saved tilings of apps. Click **+** in the strip: other apps hide and a see-through
-  overlay covers the screen. Drag apps in from the strip; dropping on an edge of an app splits it
+- **Gates**: saved tilings of apps. Click **+** in the airspace: other apps hide and a see-through
+  overlay covers the screen. Drag apps in from the airspace; dropping on an edge of an app splits it
   that way, so columns and rows nest into any pattern, and each real window follows its zone as you
   build. Opening a gate puts every window in its spot, restoring minimized and full-screen ones and
   launching apps that aren't running. While a gate is open its windows only resize together, by the
@@ -24,13 +24,13 @@ edge, and what needs you flies by without taking your focus.
   and goes still (Claude finishing a task, a build ending) flies by too.
 - **Holding pattern**: fly-bys wait while you're focused (two minutes in one app, typing) and
   during calls (microphone or camera on), and come at the next break. Urgent ones never wait.
-- **Suggestions**: switch back and forth between two apps often and the strip offers to make them
+- **Suggestions**: switch back and forth between two apps often and the airspace offers to make them
   a gate.
 - **Show Desktop** hides everything to reach the desktop, then returns to the gate you were in.
 
 ## Shortcuts
 
-Hold ⌃⌥ to see every key where it applies. ⌃⌥1 to ⌃⌥9 open gates by their place in the strip; the
+Hold ⌃⌥ to see every key where it applies. ⌃⌥1 to ⌃⌥9 open gates by their place in the airspace; the
 rest can be changed in Settings → Shortcuts:
 
 | | |
@@ -46,13 +46,13 @@ swipe can switch gates too (Settings → Gates).
 
 ## Permissions
 
-Ground Control works with none: the strip hides until the pointer reaches its edge, shows badges,
+Ground Control works with none: the airspace hides until the pointer reaches its edge, shows badges,
 switches apps and pulses a tile when something needs you. Each permission adds to that, and
 Settings says what it's for next to the feature that uses it.
 
-- **Accessibility**: moving and resizing windows (gates, keeping the strip clear) and reading
+- **Accessibility**: moving and resizing windows (gates, keeping the airspace clear) and reading
   notification banners to tell what's urgent. Their text stays on your Mac.
-- **Screen Recording**: window previews in the strip, the hover peek and fly-bys, and noticing a
+- **Screen Recording**: window previews in the airspace, the hover peek and fly-bys, and noticing a
   terminal go quiet.
 
 ## Install

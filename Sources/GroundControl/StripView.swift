@@ -83,7 +83,7 @@ struct StripView: View {
                         return NSItemProvider(object: app.id as NSString)
                     }
                     .contextMenu {
-                        Button("Hide from Strip") { settings.hiddenApps.insert(app.id) }
+                        Button("Hide from Airspace") { settings.hiddenApps.insert(app.id) }
                     }
                     .help(app.name)
                 }

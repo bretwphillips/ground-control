@@ -488,7 +488,7 @@ private struct GateOverlay: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 13, weight: .semibold))
                     .frame(width: 150)
-                Text("Drag apps from the strip. Drop on an edge to split; drag borders to resize.")
+                Text("Drag apps from your airspace. Drop on an edge to split; drag borders to resize.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Button("Cancel") { done(false) }
@@ -532,7 +532,7 @@ private struct EmptyGate: View {
                     .strokeBorder(Color.accentColor.opacity(targeted ? 1 : 0.6), style: StrokeStyle(lineWidth: 3, dash: [10]))
             )
             .overlay {
-                Label("Drag apps here from the strip", systemImage: "airplane.arrival")
+                Label("Drag apps here from your airspace", systemImage: "airplane.arrival")
                     .font(.system(size: 15, weight: .medium))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)

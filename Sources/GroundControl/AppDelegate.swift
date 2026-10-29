@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch action {
             case .gate(let index):
                 guard let all = self?.gateStore.gates, index < all.count else { return }
-                gates.open(all[index])
+                gates.switchTo(all[index])
             case .named(.back): gates.openPrevious()
             case .named(.gateLeft): gates.step(by: -1)
             case .named(.gateRight): gates.step(by: 1)

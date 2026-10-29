@@ -453,7 +453,21 @@ final class GateController {
         guard !gates.isEmpty else { return }
         let from = gates.firstIndex { $0.id == (store.current ?? store.previous) }
         let index = from.map { (($0 + step) % gates.count + gates.count) % gates.count } ?? 0
-        open(gates[index])
+        switchTo(gates[index], direction: step)
+    }
+
+    /// Opens a gate the user picked (a tile, a number, a step or a swipe) with the transition,
+    /// sliding the way the gate lies along the airspace from the one open now.
+    func switchTo(_ gate: Gate, direction: Int? = nil) {
+        guard gate.id != store.current else {
+            open(gate)
+            return
+        }
+        let gates = store.gates
+        let from = gates.firstIndex { $0.id == store.current }
+        let to = gates.firstIndex { $0.id == gate.id }
+        let side = direction ?? from.flatMap { from in to.map { $0 > from ? 1 : -1 } } ?? 0
+        Transition.shared.run(direction: side) { [weak self] in self?.open(gate) }
     }
 
     /// Brings forward the app `step` places along the open gate from the one in front, wrapping
@@ -472,7 +486,7 @@ final class GateController {
     /// Flips back to the gate open before this one.
     func openPrevious() {
         guard let target = store.previous, let gate = store.gates.first(where: { $0.id == target }) else { return }
-        open(gate)
+        switchTo(gate)
     }
 
     /// `focus` is the app to end up in front; by default the app in front keeps focus if it's in

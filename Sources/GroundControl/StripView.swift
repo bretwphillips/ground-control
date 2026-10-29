@@ -29,7 +29,7 @@ struct StripView: View {
                         current: gate.id == gates.current,
                         calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
                     )
-                    .onTapGesture { gateController.open(gate) }
+                    .onTapGesture { gateController.switchTo(gate) }
                     .onDrag {
                         DraggedGate.id = gate.id
                         return NSItemProvider(object: "gate:\(gate.id.uuidString)" as NSString)

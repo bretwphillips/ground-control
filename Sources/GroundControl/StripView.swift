@@ -68,16 +68,16 @@ struct StripView: View {
                     }
                     .help(app.name)
                 }
-                // Parked gates sit apart at the end, out of the way of everyday switching.
+                // The hangar: parked gates apart at the end, out of the way of everyday switching.
                 if !gates.editing, !gates.parkedGates.isEmpty {
                     Divider().frame(width: horizontal ? nil : 40, height: horizontal ? 24 : nil)
                     Image(nsImage: HangarIcon.image())
                         .foregroundStyle(.secondary)
-                        .help("Parked gates: kept in the hangar, passed by when switching")
+                        .help("Hangar: gates kept here for now and then, passed by when switching")
                     ForEach(gates.parkedGates) { gate in
                         gateTile(gate, apps: apps)
                             .opacity(gate.id == gates.current ? 1 : 0.7)
-                            .help("\(gate.name) (parked)")
+                            .help("\(gate.name) (in the hangar)")
                     }
                 }
                 if !gates.editing {
@@ -119,7 +119,7 @@ struct StripView: View {
         .tileFrame(.gate(gate.id))
         .contextMenu {
             Button("Edit Gate…") { gateController.edit(gate) }
-            Button(gate.isParked ? "Unpark" : "Park") { gates.setParked(gate.id, !gate.isParked) }
+            Button(gate.isParked ? "Take Out of Hangar" : "Move to Hangar") { gates.setParked(gate.id, !gate.isParked) }
             Divider()
             Button("Delete Gate") { gates.delete(gate.id) }
         }

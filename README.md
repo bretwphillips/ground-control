@@ -27,9 +27,9 @@ or Claude task that's finished, never in the middle of a sentence or a call.
   build. Opening a gate puts every window in its spot, restoring minimized and full-screen ones and
   launching apps that aren't running. While a gate is open its windows only resize together, by the
   handles on the seams between them, and the app you're using grows a little (**squish**).
-  Right-click a gate to edit, park or delete it; drag it to reorder. Parked gates sit apart at the
-  end of the airspace for things you need now and then: a click opens them, but swipes, step keys
-  and number shortcuts pass them by.
+  Right-click a gate to edit, delete or move it to the **hangar**; drag it to reorder. The hangar
+  sits apart at the end of the airspace for gates you need now and then: a click opens them, but
+  swipes, step keys and number shortcuts pass them by.
 - **Fly-bys**: when something needs you, a live preview of its window floats in a corner for a few
   seconds without taking focus. Click it or press ⌃⌥M to open its gate. What counts is a setting:
   every notification, mentions/DMs/urgent (the default), or only urgent, where urgent means a

@@ -24,10 +24,8 @@ final class Transition {
     }
 
     /// `direction` is -1 or 1 for a gate to the left or right, 0 for one picked directly.
-    /// `squish` is a resize within a gate: no slide, a longer settle and a gentler fade.
-    func run(direction: Int, squish: Bool = false, _ change: @escaping () -> Void) {
-        let speed = Settings.shared.switchSpeed
-        guard !busy, let timing = squish ? speed.squishTiming : speed.timing, CGPreflightScreenCaptureAccess(),
+    func run(direction: Int, _ change: @escaping () -> Void) {
+        guard !busy, let timing = Settings.shared.switchSpeed.timing, CGPreflightScreenCaptureAccess(),
               let screen = NSScreen.screens.first else {
             change()
             return
@@ -54,7 +52,7 @@ final class Transition {
             away.origin.x -= CGFloat(direction) * screen.frame.width * 0.25
             await NSAnimationContext.runAnimationGroup { context in
                 context.duration = timing.slide
-                context.timingFunction = CAMediaTimingFunction(name: squish ? .easeInEaseOut : .easeOut)
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().alphaValue = 0
                 if !still { panel.animator().setFrame(away, display: true) }
             }

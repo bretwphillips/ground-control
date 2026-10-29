@@ -55,13 +55,14 @@ enum WindowMover {
         return CGRect(origin: origin, size: extent)
     }
 
-    static func setFrame(_ window: AXUIElement, _ frame: CGRect) {
+    /// `exact: false` skips the second move, for the in-between steps of an animation.
+    static func setFrame(_ window: AXUIElement, _ frame: CGRect, exact: Bool = true) {
         var origin = frame.origin
         var size = frame.size
         // Moved again after resizing: a window can't shrink past the screen edge it's pinned to.
         AX.set(window, kAXPositionAttribute, AXValueCreate(.cgPoint, &origin))
         AX.set(window, kAXSizeAttribute, AXValueCreate(.cgSize, &size))
-        AX.set(window, kAXPositionAttribute, AXValueCreate(.cgPoint, &origin))
+        if exact { AX.set(window, kAXPositionAttribute, AXValueCreate(.cgPoint, &origin)) }
     }
 
     /// Whether the app has a window on the desktop in view. The on-screen window list only covers
@@ -112,5 +113,50 @@ enum WindowMover {
             AX.value(window, kAXSubroleAttribute) == kAXStandardWindowSubrole
                 && AX.value(window, kAXMinimizedAttribute) != true
         }
+    }
+}
+
+/// Moves windows to new frames in small steps, so a resize is seen as growing and shrinking
+/// rather than a jump.
+final class WindowAnimator {
+    static let shared = WindowAnimator()
+
+    struct Move {
+        let window: AXUIElement
+        let from: CGRect
+        let to: CGRect
+    }
+
+    private var timer: Timer?
+
+    func animate(_ moves: [Move], duration: Double, done: (() -> Void)? = nil) {
+        timer?.invalidate()
+        guard duration > 0 else {
+            moves.forEach { WindowMover.setFrame($0.window, $0.to) }
+            done?()
+            return
+        }
+        let start = Date()
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { timer in
+            let progress = min(Date().timeIntervalSince(start) / duration, 1)
+            // Eases in and out, so the change starts and settles gently.
+            let eased = progress < 0.5 ? 2 * progress * progress : 1 - pow(-2 * progress + 2, 2) / 2
+            for move in moves {
+                WindowMover.setFrame(move.window, Self.blend(move.from, move.to, eased), exact: false)
+            }
+            guard progress >= 1 else { return }
+            timer.invalidate()
+            moves.forEach { WindowMover.setFrame($0.window, $0.to) }
+            done?()
+        }
+    }
+
+    private static func blend(_ a: CGRect, _ b: CGRect, _ t: Double) -> CGRect {
+        CGRect(
+            x: a.minX + (b.minX - a.minX) * t,
+            y: a.minY + (b.minY - a.minY) * t,
+            width: a.width + (b.width - a.width) * t,
+            height: a.height + (b.height - a.height) * t
+        ).integral
     }
 }

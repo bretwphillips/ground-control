@@ -42,13 +42,12 @@ enum SwitchSpeed: String, CaseIterable {
         }
     }
 
-    /// Squish resizes every window in place, and apps redraw at their own pace, so it waits longer
-    /// for them and fades more gently than a switch between gates.
-    var squishTiming: (settle: Double, slide: Double)? {
+    /// How long squish takes to grow the focused app into its new size.
+    var squishDuration: Double? {
         switch self {
         case .instant: nil
-        case .quick: (0.12, 0.26)
-        case .smooth: (0.18, 0.36)
+        case .quick: 0.2
+        case .smooth: 0.32
         }
     }
 }

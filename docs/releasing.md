@@ -11,3 +11,5 @@ is made, and a release is made only when it's decided to make one.
 
 Installed copies see it within a day, or on **Check for Updates…**. Updating fast-forwards the
 installed clone to the tag, rebuilds with `scripts/bundle.sh` and relaunches.
+
+The app icon is drawn by `swift scripts/make-icon.swift Resources/AppIcon.icns`.

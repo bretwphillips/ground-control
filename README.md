@@ -89,3 +89,7 @@ Ground Control follows tagged releases. Once a day, and from **Check for Updates
 it asks GitHub for the latest release; updating moves your clone to it, rebuilds and relaunches.
 A clone with changes of its own, or not on `main`, is left alone. See
 [docs/releasing.md](docs/releasing.md) for making a release.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

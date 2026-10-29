@@ -37,19 +37,21 @@ final class SwipeWatcher {
         log.notice("swipes: watching \(devices.count) trackpad(s), touch size \(MemoryLayout<MTTouch>.stride)")
     }
 
-    /// Fires once per swipe, when the fingers' average has moved a sixth of the trackpad sideways.
+    /// Fires once per swipe, when the fingers' average has moved a tenth of the trackpad sideways.
+    /// A finger briefly lifting or landing mid-swipe doesn't start it over; lifting them all does.
     fileprivate func frame(_ touches: UnsafeMutablePointer<MTTouch>?, count: Int) {
-        guard fingers > 0, let touches, count == fingers else {
+        guard fingers > 0, let touches, count > 0 else {
             startX = nil
             fired = false
             return
         }
+        guard count == fingers else { return }
         let x = (0..<count).reduce(Float(0)) { $0 + touches[$1].normalized.position.x } / Float(count)
         guard let start = startX else {
             startX = x
             return
         }
-        guard !fired, abs(x - start) > 0.16 else { return }
+        guard !fired, abs(x - start) > 0.1 else { return }
         fired = true
         // Like moving between desktops: swiping left brings the next one in from the right.
         let step = x < start ? 1 : -1

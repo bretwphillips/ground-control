@@ -52,8 +52,9 @@ rest can be changed in Settings → Shortcuts:
 | ⌃⌥M | answer the fly-by |
 | ⌃⌥0 | show the desktop |
 
-The defaults keep clear of the ⌃⌥ keys window snappers like Magnet use. A four- or five-finger
-swipe can switch gates too (Settings → Gates).
+The defaults keep clear of the ⌃⌥ keys window snappers like Magnet use. A three-, four- or five-finger
+swipe can switch gates too (Settings → Gates), once macOS's own swipes with that many fingers are
+turned off or moved in Trackpad settings.
 
 ## Permissions
 

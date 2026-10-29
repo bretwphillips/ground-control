@@ -118,12 +118,13 @@ struct SettingsView: View {
             Section {
                 Picker("Swipe to switch gates", selection: $settings.swipeFingers) {
                     Text("Off").tag(0)
+                    Text("Three fingers").tag(3)
                     Text("Four fingers").tag(4)
                     Text("Five fingers").tag(5)
                 }
                 if settings.swipeFingers > 0 {
                     HStack(alignment: .firstTextBaseline) {
-                        note("Swipe left for the next gate, right for the previous. If it also switches desktops, give \"Swipe between full-screen applications\" other fingers.")
+                        note(swipeNote)
                         Spacer(minLength: 0)
                         Button("Open Trackpad…") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Trackpad-Settings.extension")!)
@@ -227,6 +228,20 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// macOS uses three- and four-finger side swipes itself, and Ground Control can't stop it, so
+    /// those have to be turned off or moved in Trackpad settings first.
+    private var swipeNote: String {
+        let swipe = "Swipe left for the next gate, right for the previous."
+        switch settings.swipeFingers {
+        case 3:
+            return swipe + " macOS uses three fingers too, so in Trackpad → More Gestures set \"Swipe between pages\" to two fingers or off, and \"Swipe between full-screen applications\" to four fingers or off. Otherwise both happen."
+        case 4:
+            return swipe + " macOS may use four fingers too: in Trackpad → More Gestures, set \"Swipe between full-screen applications\" to three fingers or off. Otherwise both happen."
+        default:
+            return swipe + " macOS doesn't use five-finger swipes, so nothing needs changing."
+        }
     }
 
     private func note(_ text: String) -> some View {

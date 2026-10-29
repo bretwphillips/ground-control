@@ -129,6 +129,9 @@ final class WindowAnimator {
 
     private var timer: Timer?
 
+    /// Windows are on their way somewhere, so where they are now isn't where they belong.
+    var moving: Bool { timer?.isValid ?? false }
+
     func animate(_ moves: [Move], duration: Double, done: (() -> Void)? = nil) {
         timer?.invalidate()
         guard duration > 0 else {

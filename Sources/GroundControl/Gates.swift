@@ -420,6 +420,9 @@ final class GateController {
             }
             let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : settings.squishSpeed.duration
             WindowAnimator.shared.animate(moves, duration: duration) { [weak self] in
+                // Where they ended up is where they belong now; noted once they've stopped moving.
+                self?.settled = [:]
+                self?.openedAt = Date().addingTimeInterval(-2.5)
                 self?.refreshSeams()
             }
             // The new arrangement is where the windows belong now.
@@ -607,7 +610,8 @@ final class GateController {
     /// minimized, hidden, full screen or closed. Clicking the gate puts it all back.
     func checkDrift() {
         // Showing the desktop hides the gate's apps for a moment; that isn't them moving away.
-        guard permissions.accessibility, dragBase == nil, !desktop.showing, let id = store.current, Date().timeIntervalSince(openedAt) > 3,
+        guard permissions.accessibility, dragBase == nil, !desktop.showing, !WindowAnimator.shared.moving,
+              let id = store.current, Date().timeIntervalSince(openedAt) > 3,
               let gate = store.gates.first(where: { $0.id == id }) else { return }
         if settled.isEmpty {
             // Windows still nowhere to be seen by now (another desktop) don't count.

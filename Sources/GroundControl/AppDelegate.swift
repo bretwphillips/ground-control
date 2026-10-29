@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The gate that was open when a call started, to go back to after.
     private var beforeMeeting: UUID?
     private var swipeFingers: AnyCancellable?
+    private let updates = Updates()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let tracker = AppTracker(settings: settings)
@@ -64,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.previews = previews
         self.strip = strip
         self.flyBy = flyBy
-        settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gateStore)
+        settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gateStore, updates: updates)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = TowerIcon.image()
@@ -89,16 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         desktop.target = self
         menu.addItem(desktop)
 
-        let flights = NSMenu()
-        for app in tracker?.apps ?? [] {
-            let item = NSMenuItem(title: app.name, action: #selector(previewFlyBy(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = app.id
-            flights.addItem(item)
-        }
-        let flyByItem = NSMenuItem(title: "Preview a Fly-by", action: nil, keyEquivalent: "")
-        flyByItem.submenu = flights
-        menu.addItem(flyByItem)
+        let check = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        check.target = self
+        menu.addItem(check)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Ground Control", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -129,15 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow?.show()
     }
 
-    /// Waits a few seconds so there's time to click back into another app first.
-    @objc private func previewFlyBy(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String else { return }
-        if settings.flyByPreview, !permissions.screenRecording {
-            Permission.screenRecording.request()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let app = self?.tracker?.apps.first(where: { $0.id == id }) else { return }
-            self?.tracker?.call(Call(app: app, kind: .preview))
-        }
+    @objc private func checkForUpdates() {
+        updates.check(asked: true)
     }
 }

@@ -71,10 +71,9 @@ struct StripView: View {
                 // Parked gates sit apart at the end, out of the way of everyday switching.
                 if !gates.editing, !gates.parkedGates.isEmpty {
                     Divider().frame(width: horizontal ? nil : 40, height: horizontal ? 24 : nil)
-                    Image(systemName: "parkingsign")
-                        .font(.system(size: 10, weight: .semibold))
+                    Image(nsImage: HangarIcon.image())
                         .foregroundStyle(.secondary)
-                        .help("Parked gates: kept here, passed by when switching")
+                        .help("Parked gates: kept in the hangar, passed by when switching")
                     ForEach(gates.parkedGates) { gate in
                         gateTile(gate, apps: apps)
                             .opacity(gate.id == gates.current ? 1 : 0.7)

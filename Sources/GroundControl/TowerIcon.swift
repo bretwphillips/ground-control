@@ -45,3 +45,36 @@ enum TowerIcon {
         return image
     }
 }
+
+enum HangarIcon {
+    /// A hangar for parked gates: an arched roof over an open door, on the ground. A template, so it
+    /// follows the appearance like the airspace's other symbols.
+    static func image(side: CGFloat = 14) -> NSImage {
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
+            let s = side / 14
+            NSColor.black.setFill()
+            // The arched roof and walls, solid.
+            let shell = NSBezierPath()
+            shell.move(to: NSPoint(x: 0.5 * s, y: 12.5 * s))
+            shell.line(to: NSPoint(x: 0.5 * s, y: 7 * s))
+            shell.curve(to: NSPoint(x: 13.5 * s, y: 7 * s),
+                        controlPoint1: NSPoint(x: 0.5 * s, y: 0.5 * s),
+                        controlPoint2: NSPoint(x: 13.5 * s, y: 0.5 * s))
+            shell.line(to: NSPoint(x: 13.5 * s, y: 12.5 * s))
+            shell.close()
+            shell.fill()
+            // The open door, cut out of it.
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(rect: NSRect(x: 3.5 * s, y: 7 * s, width: 7 * s, height: 5.5 * s)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            // Sliding door panels in the opening.
+            for x in [5.6, 8.0] {
+                NSBezierPath(rect: NSRect(x: x * s, y: 7 * s, width: 0.45 * s, height: 5.5 * s)).fill()
+            }
+            NSBezierPath(rect: NSRect(x: 0, y: 12.5 * s, width: 14 * s, height: 1.5 * s)).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+}

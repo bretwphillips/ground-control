@@ -42,12 +42,20 @@ enum SwitchSpeed: String, CaseIterable {
         }
     }
 
-    /// How long squish takes to grow the focused app into its new size.
-    var squishDuration: Double? {
+}
+
+/// How long squish takes to grow the focused app into its new size, separate from switching gates.
+enum SquishSpeed: String, CaseIterable {
+    case off, quick, smooth, slow
+
+    var title: String { self == .off ? "Off (snap)" : rawValue.capitalized }
+
+    var duration: Double {
         switch self {
-        case .instant: nil
+        case .off: 0
         case .quick: 0.2
         case .smooth: 0.32
+        case .slow: 1
         }
     }
 }
@@ -143,9 +151,8 @@ final class Settings: ObservableObject {
     @Published var gateGap: Double {
         didSet { defaults.set(gateGap, forKey: "gateGap") }
     }
-    /// Windows grow and shrink into place when squish moves them, instead of snapping.
-    @Published var animateSquish: Bool {
-        didSet { defaults.set(animateSquish, forKey: "animateSquish") }
+    @Published var squishSpeed: SquishSpeed {
+        didSet { defaults.set(squishSpeed.rawValue, forKey: "squishSpeed") }
     }
     @Published var switchSpeed: SwitchSpeed {
         didSet { defaults.set(switchSpeed.rawValue, forKey: "switchSpeed") }
@@ -204,7 +211,9 @@ final class Settings: ObservableObject {
         squishAmount = defaults.object(forKey: "squishAmount") as? Double ?? 0.25
         autoOpen = defaults.object(forKey: "autoOpen") as? Bool ?? false
         swipeFingers = defaults.object(forKey: "swipeFingers") as? Int ?? 0
-        animateSquish = defaults.object(forKey: "animateSquish") as? Bool ?? true
+        // "Animate squish" turned off carries over as Off.
+        squishSpeed = SquishSpeed(rawValue: defaults.string(forKey: "squishSpeed") ?? "")
+            ?? (defaults.object(forKey: "animateSquish") as? Bool == false ? .off : .quick)
         switchSpeed = SwitchSpeed(rawValue: defaults.string(forKey: "switchSpeed") ?? "") ?? .quick
         gateGap = defaults.object(forKey: "gateGap") as? Double ?? 0
         dismissedPairs = Set(defaults.stringArray(forKey: "dismissedPairs") ?? [])

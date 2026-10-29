@@ -418,8 +418,7 @@ final class GateController {
                       let from = WindowMover.frame(of: window) else { return nil }
                 return WindowAnimator.Move(window: window, from: from, to: frame)
             }
-            let duration = settings.animateSquish && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                ? settings.switchSpeed.squishDuration ?? 0 : 0
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : settings.squishSpeed.duration
             WindowAnimator.shared.animate(moves, duration: duration) { [weak self] in
                 self?.refreshSeams()
             }

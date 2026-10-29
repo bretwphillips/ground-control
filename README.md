@@ -1,69 +1,79 @@
 # Ground Control
 
-A macOS menu bar app for working on one screen. Your focus app gets the whole
-screen except a thin strip, and every other app circles in that strip until you
-need it, without swiping between desktops.
+A macOS menu bar app for working on one screen. Instead of swiping between desktops, the apps you
+use sit together in **gates** you build yourself, everything else waits in a thin strip along one
+edge, and what needs you flies by without taking your focus.
 
-## Vocabulary
+## What it does
 
-- **The pattern**: the strip along one edge (top by default) where apps wait, with their Dock badges.
-- **Landing**: click an app in the strip and it comes forward, filling the screen beside the strip.
-- **Gate**: a saved tiling of apps, built in place. Click **+** in the strip (or New Gate… in
-  the menu): other apps hide, and a see-through overlay covers the space beside the strip.
-  Drag apps in from the strip (it lists every app while you build); dropping on an edge of an
-  app splits it that way, so columns and rows nest into any pattern. Drag the borders to
-  resize, and × removes an app. With Accessibility each app's real window follows its zone as
-  you go; Cancel puts them back. Clicking a gate, or pressing ⌃⌥1 to ⌃⌥9, puts each window in
-  its spot and brings them forward, launching any app that isn't running. Right-click a gate to
-  edit or delete it. Apps in a gate leave the strip's app list.
-- **Shortcuts**: ⌃⌥1 to ⌃⌥9 open gates by their place in the strip. The rest can be changed in
-  Settings → Shortcuts; by default ⌃⌥H / ⌃⌥L step to the gate on either side (wrapping around),
-  ⌃⌥Tab goes back to the last gate, ⌃⌥N / ⌃⌥⇧N switch to the next or previous app in the open
-  gate, and ⌃⌥M answers a fly-by (or the last app to call in the past minute). The defaults keep
-  clear of the ⌃⌥ keys window snappers like Magnet use.
-- **Fly-by**: when something needs you, its tile pulses and a live preview of its window floats
-  in a corner for a few seconds without taking focus. Click it (or press ⌃⌥M) to open the app's
-  gate, or ignore it and it goes away. What counts is a setting: every notification, mentions,
-  DMs and urgent ones (the default), or only urgent ones. Urgent means a notification mentions
-  one of your urgent words or people; Ground Control reads banners through Accessibility to tell.
-  A terminal that was busy for 20 seconds and goes still (Claude finishing a task) flies by too.
+- **The strip**: the apps you're not looking at, along one edge (top by default), with their Dock
+  badges coloured and shaped by urgency: **!** red for urgent, a number in orange for mentions and
+  DMs, ✓ green for a terminal that finished, a blue dot for plain unreads. Hover a tile for a larger
+  preview. It can hide until you need it.
+- **Gates**: saved tilings of apps. Click **+** in the strip: other apps hide and a see-through
+  overlay covers the screen. Drag apps in from the strip; dropping on an edge of an app splits it
+  that way, so columns and rows nest into any pattern, and each real window follows its zone as you
+  build. Opening a gate puts every window in its spot, restoring minimized and full-screen ones and
+  launching apps that aren't running. While a gate is open its windows only resize together, by the
+  handles on the seams between them, and the app you're using grows a little (**squish**).
+  Right-click a gate to edit or delete it; drag it to reorder.
+- **Fly-bys**: when something needs you, a live preview of its window floats in a corner for a few
+  seconds without taking focus. Click it or press ⌃⌥M to open its gate. What counts is a setting:
+  every notification, mentions/DMs/urgent (the default), or only urgent, where urgent means a
+  notification mentions one of your words or people, or mentions pile up. A terminal that was busy
+  and goes still (Claude finishing a task, a build ending) flies by too.
 - **Holding pattern**: fly-bys wait while you're focused (two minutes in one app, typing) and
-  during calls (microphone or camera on), and come through at the next break or after a few
-  minutes. Urgent ones never wait. A gate can be set to open for calls; the one from before comes
-  back after.
+  during calls (microphone or camera on), and come at the next break. Urgent ones never wait.
+- **Suggestions**: switch back and forth between two apps often and the strip offers to make them
+  a gate.
+- **Show Desktop** hides everything to reach the desktop, then returns to the gate you were in.
 
-Chat apps generally show `•` for plain unreads and a number for mentions and DMs,
-so only numbers start a fly-by.
+## Shortcuts
+
+Hold ⌃⌥ to see every key where it applies. ⌃⌥1 to ⌃⌥9 open gates by their place in the strip; the
+rest can be changed in Settings → Shortcuts:
+
+| | |
+|---|---|
+| ⌃⌥H / ⌃⌥L | gate to the left / right, wrapping around |
+| ⌃⌥Tab | back to the last gate |
+| ⌃⌥N / ⌃⌥⇧N | next / previous app in the open gate |
+| ⌃⌥M | answer the fly-by |
+| ⌃⌥0 | show the desktop |
+
+The defaults keep clear of the ⌃⌥ keys window snappers like Magnet use. A four- or five-finger
+swipe can switch gates too (Settings → Gates).
 
 ## Permissions
 
-Ground Control works with no permissions: the strip hides until you push the pointer to its
-edge, shows badges, switches apps, and pulses a tile when a mention arrives. Each permission
-adds to that, and Settings explains what it's for next to the feature that uses it.
+Ground Control works with none: the strip hides until the pointer reaches its edge, shows badges,
+switches apps and pulses a tile when something needs you. Each permission adds to that, and
+Settings says what it's for next to the feature that uses it.
 
-- **Accessibility**: the strip keeps its own slice of the screen (windows are kept out from
-  under it), landed apps are sized to fit, and gates put windows back in place. Without it,
-  a gate only brings its apps forward.
-- **Screen Recording**: window previews on the Large strip, and the live preview in fly-bys.
+- **Accessibility**: moving and resizing windows (gates, keeping the strip clear) and reading
+  notification banners to tell what's urgent. Their text stays on your Mac.
+- **Screen Recording**: window previews in the strip, the hover peek and fly-bys, and noticing a
+  terminal go quiet.
 
-## Build and run
+## Install
 
-Requires macOS 14+ and the Swift toolchain (Xcode or Command Line Tools).
+Requires macOS 14 or later and the Swift toolchain (Xcode or the Command Line Tools).
 
 ```sh
+git clone https://github.com/bretwphillips/ground-control.git
+cd ground-control
+scripts/make-cert.sh        # once: a signing identity so permissions survive updates
 scripts/bundle.sh
 open "build/Ground Control.app"
 ```
 
-Run `scripts/make-cert.sh` once first: it adds a self-signed "Ground Control Dev" signing
-identity to your login keychain and trusts it for code signing (asks for your password).
-macOS ties permissions to that identity, so they survive rebuilds; without it builds are
-ad-hoc signed and every rebuild has to be granted again. When codesign first asks to use
-the key, choose Always Allow.
+`make-cert.sh` adds a self-signed "Ground Control Dev" identity to your login keychain and trusts
+it for code signing (it asks for your password). macOS ties permissions to that identity, so they
+carry over when the app is rebuilt. When codesign first asks to use the key, choose Always Allow.
 
-## Settings
+## Updates
 
-Open Settings from the airplane in the menu bar: the strip's edge and size (icons, icons and
-names, or large tiles with optional previews), keeping windows clear, fly-by behaviour, and
-which apps appear in the strip. The menu also has **Preview a Fly-by**, which plays one for
-the chosen app after three seconds.
+Ground Control follows tagged releases. Once a day, and from **Check for Updates…** in the menu,
+it asks GitHub for the latest release; updating moves your clone to it, rebuilds and relaunches.
+A clone with changes of its own, or not on `main`, is left alone. See
+[docs/releasing.md](docs/releasing.md) for making a release.

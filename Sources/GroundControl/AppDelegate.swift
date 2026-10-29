@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var swipeFingers: AnyCancellable?
     private let updates = Updates()
     private var groundStopIcon: AnyCancellable?
+    private var walkthrough: Walkthrough?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = TypingFocus.shared
@@ -69,6 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.flyBy = flyBy
         // Give windows a moment to be found before checking the last gate still matches them.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak strip] in strip?.gates.resume() }
+        walkthrough = Walkthrough(permissions: permissions) { [weak strip] in strip?.gates.newGate() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.walkthrough?.showIfFirstRun() }
         settingsWindow = SettingsWindow(settings: settings, permissions: permissions, hotKeys: hotKeys, gates: gateStore, updates: updates)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -116,6 +119,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         desktop.target = self
         menu.addItem(desktop)
 
+        let tour = NSMenuItem(title: "Welcome Tour…", action: #selector(showWalkthrough), keyEquivalent: "")
+        tour.target = self
+        menu.addItem(tour)
+
         let check = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         check.target = self
         menu.addItem(check)
@@ -156,6 +163,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showSettings() {
         settingsWindow?.show()
+    }
+
+    @objc private func showWalkthrough() {
+        walkthrough?.show()
     }
 
     @objc private func checkForUpdates() {

@@ -276,7 +276,7 @@ struct SettingsView: View {
     }
 }
 
-private struct PermissionNote: View {
+struct PermissionNote: View {
     let permission: Permission
     let granted: Bool
     let reason: String

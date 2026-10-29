@@ -7,9 +7,9 @@ along one edge, and what needs you flies by without taking your focus.
 ## What it does
 
 - **Airspace**: the apps you're not looking at, circling along one edge (top by default) until
-  they're needed, with their Dock badges coloured and shaped by urgency: **!** red for urgent, a number in orange for mentions and
-  DMs, ✓ green for a terminal that finished, a blue dot for plain unreads. Hover a tile for a larger
-  preview. It can hide until you need it.
+  they're needed, with their Dock badges coloured and shaped by urgency: **!** red for urgent, a
+  number in orange for mentions and DMs, ✓ green for a terminal that finished, a blue dot for plain
+  unreads. Hover a tile for a larger preview. It can hide until you need it.
 - **Gates**: saved tilings of apps. Click **+** in the airspace: other apps hide and a see-through
   overlay covers the screen. Drag apps in from the airspace; dropping on an edge of an app splits it
   that way, so columns and rows nest into any pattern, and each real window follows its zone as you

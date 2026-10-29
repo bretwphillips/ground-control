@@ -120,8 +120,15 @@ final class AppTracker: ObservableObject {
     func banner(from running: NSRunningApplication, text: String) {
         guard settings.flyBy, let app = allApps.first(where: { $0.pid == running.processIdentifier }) else { return }
         let urgent = settings.isUrgent(text)
-        guard urgent || settings.flyByTrigger == .everything else { return }
-        call(Call(app: app, kind: .notification, note: text, urgent: urgent))
+        if urgent || settings.flyByTrigger == .everything {
+            call(Call(app: app, kind: .notification, note: text, urgent: urgent))
+        }
+        // The words didn't catch it: Claude can still judge it urgent, if the user turned that on.
+        guard !urgent, settings.askClaude else { return }
+        Task { @MainActor [weak self] in
+            guard await UrgencyCheck.shared.isUrgent(text, from: app.name) == true else { return }
+            self?.call(Call(app: app, kind: .notification, note: text, urgent: true))
+        }
     }
 
     /// A terminal that was busy has gone quiet.

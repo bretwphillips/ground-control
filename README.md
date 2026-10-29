@@ -33,7 +33,8 @@ or Claude task that's finished, never in the middle of a sentence or a call.
 - **Fly-bys**: when something needs you, a live preview of its window floats in a corner for a few
   seconds without taking focus. Click it or press ⌃⌥M to open its gate. What counts is a setting:
   every notification, mentions/DMs/urgent (the default), or only urgent, where urgent means a
-  notification mentions one of your words or people, or mentions pile up. A terminal that was busy
+  notification mentions one of your words or people, or mentions pile up. Optionally, Claude can
+  judge the rest (Settings → Fly-bys, with your own Anthropic API key kept in the Keychain). A terminal that was busy
   and goes still (Claude finishing a task, a build ending) flies by too.
 - **Holding pattern**: fly-bys wait while you're focused (two minutes in one app, typing) and
   during calls (microphone or camera on), and come at the next break. Urgent ones never wait.

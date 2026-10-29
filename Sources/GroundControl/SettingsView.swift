@@ -170,6 +170,11 @@ struct SettingsView: View {
                 Section("Urgent") {
                     TextField("Words and people", text: $settings.urgentWords, prompt: Text("urgent, prod, Jane"))
                     Stepper("Mentions turn urgent at \(settings.urgentMentions)", value: $settings.urgentMentions, in: 2...50)
+                    Toggle("Ask Claude about the rest", isOn: $settings.askClaude)
+                    if settings.askClaude {
+                        ClaudeKeyField()
+                        note("Notifications the words don't catch are sent to Claude (your Anthropic API key, kept in the Keychain) with their app name, and come through as urgent if it says so. Nothing else leaves your Mac. Each costs a fraction of a cent.")
+                    }
                     PermissionNote(
                         permission: .accessibility,
                         granted: permissions.accessibility,
@@ -343,5 +348,27 @@ private struct ShortcutRecorder: View {
         hotKeys.paused = false
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+    }
+}
+
+/// The Anthropic API key for asking Claude, stored in the Keychain rather than in settings.
+private struct ClaudeKeyField: View {
+    @State private var key = UrgencyCheck.apiKey ?? ""
+    @State private var saved = UrgencyCheck.apiKey?.isEmpty == false
+
+    var body: some View {
+        HStack {
+            SecureField("Anthropic API key", text: $key, prompt: Text("sk-ant-…"))
+                .onSubmit(save)
+            Button(saved ? "Saved" : "Save", action: save)
+                .controlSize(.small)
+                .disabled(saved)
+        }
+        .onChange(of: key) { _, _ in saved = false }
+    }
+
+    private func save() {
+        UrgencyCheck.apiKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        saved = true
     }
 }

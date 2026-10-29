@@ -115,6 +115,10 @@ final class Settings: ObservableObject {
     @Published var urgentMentions: Int {
         didSet { defaults.set(urgentMentions, forKey: "urgentMentions") }
     }
+    /// Ask Claude whether notifications the urgent words don't catch are urgent anyway.
+    @Published var askClaude: Bool {
+        didSet { defaults.set(askClaude, forKey: "askClaude") }
+    }
     @Published var terminalFinished: Bool {
         didSet { defaults.set(terminalFinished, forKey: "terminalFinished") }
     }
@@ -202,6 +206,7 @@ final class Settings: ObservableObject {
         flyByTrigger = FlyByTrigger(rawValue: defaults.string(forKey: "flyByTrigger") ?? "") ?? .mentions
         urgentWords = defaults.string(forKey: "urgentWords") ?? "urgent, asap, prod, outage"
         urgentMentions = defaults.object(forKey: "urgentMentions") as? Int ?? 5
+        askClaude = defaults.object(forKey: "askClaude") as? Bool ?? false
         terminalFinished = defaults.object(forKey: "terminalFinished") as? Bool ?? true
         holdWhileFocused = defaults.object(forKey: "holdWhileFocused") as? Bool ?? true
         holdMinutes = defaults.object(forKey: "holdMinutes") as? Double ?? 3

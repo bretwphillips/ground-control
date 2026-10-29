@@ -206,6 +206,11 @@ struct Gate: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
     var layout: GateLayout
+    /// Kept in the airspace but out of the way: swipes, step keys and numbers pass it by.
+    /// Optional so gates saved before parking existed still load.
+    var parked: Bool?
+
+    var isParked: Bool { parked == true }
 }
 
 final class GateStore: ObservableObject {
@@ -236,6 +241,16 @@ final class GateStore: ObservableObject {
         } else {
             gates.append(gate)
         }
+        persist()
+    }
+
+    /// The gates in everyday use, in order: what swipes, step keys and numbers go through.
+    var active: [Gate] { gates.filter { !$0.isParked } }
+    var parkedGates: [Gate] { gates.filter(\.isParked) }
+
+    func setParked(_ id: UUID, _ parked: Bool) {
+        guard let index = gates.firstIndex(where: { $0.id == id }) else { return }
+        gates[index].parked = parked ? true : nil
         persist()
     }
 
@@ -459,7 +474,8 @@ final class GateController {
     /// Opens the gate `step` places along the strip from the open one, wrapping around the ends.
     /// With none open it starts from the last one that was.
     func step(by step: Int) {
-        let gates = store.gates
+        // Parked gates are passed by.
+        let gates = store.active
         guard !gates.isEmpty else { return }
         let from = gates.firstIndex { $0.id == (store.current ?? store.previous) }
         let index = from.map { (($0 + step) % gates.count + gates.count) % gates.count } ?? 0

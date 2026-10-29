@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if case .named(.answer) = action {} else if case .named(.desktop) = action {} else { strip?.flash() }
             switch action {
             case .gate(let index):
-                guard let all = self?.gateStore.gates, index < all.count else { return }
+                guard let all = self?.gateStore.active, index < all.count else { return }
                 gates.switchTo(all[index])
             case .named(.back): gates.openPrevious()
             case .named(.gateLeft): gates.step(by: -1)

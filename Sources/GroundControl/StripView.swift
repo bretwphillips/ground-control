@@ -20,33 +20,14 @@ struct StripView: View {
 
         ScrollView(horizontal ? .horizontal : .vertical, showsIndicators: false) {
             layout {
-                ForEach(Array((gates.editing ? [] : gates.gates).enumerated()), id: \.element.id) { index, gate in
-                    GateTile(
-                        gate: gate,
-                        apps: apps,
-                        previews: previews.images,
-                        size: settings.size,
-                        current: gate.id == gates.current,
-                        calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
-                    )
-                    .onTapGesture { gateController.switchTo(gate) }
-                    .onDrag {
-                        DraggedGate.id = gate.id
-                        return NSItemProvider(object: "gate:\(gate.id.uuidString)" as NSString)
-                    }
-                    .onDrop(of: [.plainText], delegate: GateReorder(target: gate.id, store: gates))
-                    .tileFrame(.gate(gate.id))
-                    .contextMenu {
-                        Button("Edit Gate…") { gateController.edit(gate) }
-                        Divider()
-                        Button("Delete Gate") { gates.delete(gate.id) }
-                    }
-                    .help(index < 9 ? "\(gate.name)  ⌃⌥\(index + 1)" : gate.name)
-                    .overlay(alignment: .topLeading) {
-                        if keys.showing, let text = gateKeys(index, gate) {
-                            KeyCap(text: text).offset(x: -3, y: -3)
+                ForEach(Array((gates.editing ? [] : gates.active).enumerated()), id: \.element.id) { index, gate in
+                    gateTile(gate, apps: apps)
+                        .help(index < 9 ? "\(gate.name)  ⌃⌥\(index + 1)" : gate.name)
+                        .overlay(alignment: .topLeading) {
+                            if keys.showing, let text = gateKeys(index, gate) {
+                                KeyCap(text: text).offset(x: -3, y: -3)
+                            }
                         }
-                    }
                 }
                 if !gates.editing, let pair = patterns.suggestion {
                     SuggestionTile(pair: pair, size: settings.size) {
@@ -87,6 +68,19 @@ struct StripView: View {
                     }
                     .help(app.name)
                 }
+                // Parked gates sit apart at the end, out of the way of everyday switching.
+                if !gates.editing, !gates.parkedGates.isEmpty {
+                    Divider().frame(width: horizontal ? nil : 40, height: horizontal ? 24 : nil)
+                    Image(systemName: "parkingsign")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .help("Parked gates: kept here, passed by when switching")
+                    ForEach(gates.parkedGates) { gate in
+                        gateTile(gate, apps: apps)
+                            .opacity(gate.id == gates.current ? 1 : 0.7)
+                            .help("\(gate.name) (parked)")
+                    }
+                }
                 if !gates.editing {
                     DesktopTile(size: settings.size)
                         .overlay(alignment: .topLeading) {
@@ -106,6 +100,30 @@ struct StripView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
         .onPreferenceChange(TileFrames.self, perform: onTiles)
+    }
+
+    private func gateTile(_ gate: Gate, apps: [String: StripApp]) -> some View {
+        GateTile(
+            gate: gate,
+            apps: apps,
+            previews: previews.images,
+            size: settings.size,
+            current: gate.id == gates.current,
+            calling: gate.layout.leaves.contains { tracker.calling.contains($0) }
+        )
+        .onTapGesture { gateController.switchTo(gate) }
+        .onDrag {
+            DraggedGate.id = gate.id
+            return NSItemProvider(object: "gate:\(gate.id.uuidString)" as NSString)
+        }
+        .onDrop(of: [.plainText], delegate: GateReorder(target: gate.id, store: gates))
+        .tileFrame(.gate(gate.id))
+        .contextMenu {
+            Button("Edit Gate…") { gateController.edit(gate) }
+            Button(gate.isParked ? "Unpark" : "Park") { gates.setParked(gate.id, !gate.isParked) }
+            Divider()
+            Button("Delete Gate") { gates.delete(gate.id) }
+        }
     }
 
     /// Gates show only their number with ⌃⌥ held; the step and back keys are in the legend at the

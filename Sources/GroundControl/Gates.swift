@@ -411,10 +411,14 @@ final class GateController {
             guard settings.squish, let runway = runway().map(WindowMover.axFrame) else { return }
             shown = layout(of: current, focus: front, in: runway)
             focus = front
-            for (id, frame) in shown.map({ windowFrames($0, in: runway) }) ?? [] {
-                place(id, in: frame, attempts: 1)
+            let frames = shown.map { windowFrames($0, in: runway) } ?? []
+            // A cross-fade over the resize: the windows jump underneath while the old view fades.
+            Transition.shared.run(direction: 0) { [weak self] in
+                for (id, frame) in frames {
+                    self?.place(id, in: frame, attempts: 1)
+                }
+                self?.refreshSeams()
             }
-            refreshSeams()
             // The new arrangement is where the windows belong now.
             settled = [:]
             openedAt = Date().addingTimeInterval(-2.5)

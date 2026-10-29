@@ -466,6 +466,7 @@ final class GateController {
         let from = leaves.firstIndex { $0 == front } ?? -step
         let next = leaves[((from + step) % leaves.count + leaves.count) % leaves.count]
         NSRunningApplication.runningApplications(withBundleIdentifier: next).first?.activate()
+        TypingFocus.shared.restore(next)
     }
 
     /// Flips back to the gate open before this one.
@@ -507,6 +508,7 @@ final class GateController {
             delay += 0.04
         }
         log.notice("gate: \(gate.name, privacy: .public)")
+        if let focus { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { TypingFocus.shared.restore(focus) } }
         // Seams show once the apps have come forward.
         DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.3) { [weak self] in self?.refreshSeams() }
     }

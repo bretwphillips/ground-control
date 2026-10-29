@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updates = Updates()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = TypingFocus.shared
         let tracker = AppTracker(settings: settings)
         let previews = Previews(tracker: tracker, settings: settings, permissions: permissions)
         let strip = StripController(

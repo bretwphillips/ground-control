@@ -46,7 +46,7 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            strip.tabItem { Label("Strip", systemImage: "rectangle.topthird.inset.filled") }
+            strip.tabItem { Label("Airspace", systemImage: "rectangle.topthird.inset.filled") }
             gatesTab.tabItem { Label("Gates", systemImage: "square.split.2x1") }
             flyBys.tabItem { Label("Fly-bys", systemImage: "airplane") }
             shortcuts.tabItem { Label("Shortcuts", systemImage: "keyboard") }
@@ -74,21 +74,21 @@ struct SettingsView: View {
                         reason: "Large tiles show a small picture of each app's window, which uses Screen Recording. Without it they show the app's icon."
                     )
                 }
-                Toggle("Hide the strip until you need it", isOn: $settings.autoHide)
+                Toggle("Hide the airspace until you need it", isOn: $settings.autoHide)
                 if settings.autoHide {
-                    note("Apps get the whole screen. The strip comes out at its edge, while ⌃⌥ is held, briefly after a gate shortcut or swipe, and during a fly-by.")
+                    note("Apps get the whole screen. The airspace comes out at its edge, while ⌃⌥ is held, briefly after a gate shortcut or swipe, and during a fly-by.")
                 }
-                Toggle("Keep windows out from under the strip", isOn: $settings.keepClear)
+                Toggle("Keep windows out from under the airspace", isOn: $settings.keepClear)
                 if settings.keepClear {
                     PermissionNote(
                         permission: .accessibility,
                         granted: permissions.accessibility,
-                        reason: "Moving windows uses Accessibility. Without it the strip hides until the pointer reaches its edge, and clicking an app only brings it forward."
+                        reason: "Moving windows uses Accessibility. Without it the airspace hides until the pointer reaches its edge, and clicking an app only brings it forward."
                     )
                 }
             }
 
-            Section("Apps in the strip") {
+            Section("Apps in your airspace") {
                 ForEach(runningApps(), id: \.processIdentifier) { app in
                     if let id = app.bundleIdentifier {
                         Toggle(isOn: shown(id)) {
@@ -133,7 +133,7 @@ struct SettingsView: View {
                 }
             }
             Section {
-                note("Gates move and resize windows with Accessibility. Build one with + in the strip; right-click a gate to edit it, drag it to reorder.")
+                note("Gates move and resize windows with Accessibility. Build one with + in the airspace; right-click a gate to edit it, drag it to reorder.")
             }
         }
         .formStyle(.grouped)
@@ -154,7 +154,7 @@ struct SettingsView: View {
                         PermissionNote(
                             permission: .screenRecording,
                             granted: permissions.screenRecording,
-                            reason: "Previews, and noticing a terminal go quiet, use Screen Recording. Without it the app's tile pulses in the strip instead."
+                            reason: "Previews, and noticing a terminal go quiet, use Screen Recording. Without it the app's tile pulses in the airspace instead."
                         )
                     }
                 }
@@ -209,7 +209,7 @@ struct SettingsView: View {
                 }
             }
             Section {
-                note("⌃⌥1 to ⌃⌥9 open gates by their place in the strip; hold ⌃⌥ to see every key where it applies. Click a shortcut and press new keys with ⌃, ⌥ or ⌘; Delete turns it off, Esc cancels.")
+                note("⌃⌥1 to ⌃⌥9 open gates by their place in the airspace; hold ⌃⌥ to see every key where it applies. Click a shortcut and press new keys with ⌃, ⌥ or ⌘; Delete turns it off, Esc cancels.")
             }
         }
         .formStyle(.grouped)

@@ -209,6 +209,9 @@ struct Gate: Codable, Identifiable, Equatable {
     /// Kept in the airspace but out of the way: swipes, step keys and numbers pass it by.
     /// Optional so gates saved before parking existed still load.
     var parked: Bool?
+    /// Each app's window title when the gate was saved, to pick the same window again when an app
+    /// has several. Optional so gates saved before this still load.
+    var windowTitles: [String: String]?
 
     var isParked: Bool { parked == true }
 }
@@ -241,6 +244,9 @@ final class GateStore: ObservableObject {
 
     func save(_ gate: Gate) {
         if let index = gates.firstIndex(where: { $0.id == gate.id }) {
+            var gate = gate
+            // The editor only knows the layout; a gate in the hangar stays there.
+            gate.parked = gate.parked ?? gates[index].parked
             gates[index] = gate
         } else {
             gates.append(gate)
@@ -302,6 +308,8 @@ final class GateController {
     private var focus: String?
     private var seams: SeamHandles!
     private var dragBase: GateLayout?
+    /// The open gate's window titles, by app.
+    private var titles: [String: String] = [:]
     private let windowHints = WindowHints()
     private var dragPending = false
 
@@ -433,7 +441,7 @@ final class GateController {
             // The windows grow and shrink into place, so the change can be seen.
             let moves = (shown.map { windowFrames($0, in: runway) } ?? []).compactMap { id, frame -> WindowAnimator.Move? in
                 guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
-                      let window = WindowMover.mainWindow(of: app.processIdentifier),
+                      let window = self.window(id, app.processIdentifier),
                       let from = WindowMover.frame(of: window) else { return nil }
                 return WindowAnimator.Move(window: window, from: from, to: frame)
             }
@@ -523,6 +531,7 @@ final class GateController {
     /// the gate, otherwise the gate's first app gets it.
     func open(_ gate: Gate, focus wanted: String? = nil) {
         store.current = gate.id
+        titles = gate.windowTitles ?? [:]
         openedAt = Date()
         settled = [:]
         reopened = []
@@ -573,7 +582,8 @@ final class GateController {
 
     private func edit(id: UUID, name: String, layout: GateLayout?) {
         guard let runway = runway() else { return }
-        editor.open(id: id, name: name, layout: layout, runway: runway) { [weak self] saved in
+        let titles = store.gates.first(where: { $0.id == id })?.windowTitles ?? [:]
+        editor.open(id: id, name: name, layout: layout, titles: titles, runway: runway) { [weak self] saved in
             self?.store.save(saved)
             self?.open(saved)
         }
@@ -594,7 +604,7 @@ final class GateController {
             return
         }
         let pid = app.processIdentifier
-        guard let window = WindowMover.mainWindow(of: pid) else {
+        guard let window = window(id, pid) else {
             if let minimized = WindowMover.minimizedWindow(of: pid) {
                 log.notice("gate: restoring \(id, privacy: .public) from the Dock")
                 AXUIElementSetAttributeValue(minimized, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
@@ -624,6 +634,12 @@ final class GateController {
             return
         }
         WindowMover.setFrame(window, frame)
+        // With several windows, the gate's one becomes the app's main window, so bringing the app
+        // forward brings that window.
+        if titles[id] != nil {
+            AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        }
     }
 
     /// After a restart, the gate that was open is marked open again if its windows are still where
@@ -632,6 +648,7 @@ final class GateController {
         guard permissions.accessibility, store.current == nil, let id = store.lastOpen,
               let gate = store.gates.first(where: { $0.id == id }), let runway = runway().map(WindowMover.axFrame) else { return }
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        titles = gate.windowTitles ?? [:]
         let candidates = [layout(of: gate, focus: front, in: runway), gate.layout]
         guard let match = candidates.first(where: { layout in
             windowFrames(layout, in: runway).allSatisfy { id, frame in
@@ -680,9 +697,14 @@ final class GateController {
         }
     }
 
+    /// The window this gate uses for an app: the one saved with it, by title.
+    private func window(_ id: String, _ pid: pid_t) -> AXUIElement? {
+        WindowMover.window(of: pid, titled: titles[id])
+    }
+
     private func currentFrame(of id: String) -> CGRect? {
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first, !app.isHidden,
-              let window = WindowMover.mainWindow(of: app.processIdentifier),
+              let window = window(id, app.processIdentifier),
               AX.value(window, "AXFullScreen") != true else { return nil }
         return WindowMover.frame(of: window)
     }

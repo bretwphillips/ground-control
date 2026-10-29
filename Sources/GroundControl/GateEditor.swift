@@ -16,6 +16,8 @@ final class GateEditor {
     /// Where each moved window started, so Cancel can put it back.
     private var homes: [String: (window: AXUIElement, frame: CGRect)] = [:]
     private var placed: Set<String> = []
+    /// The gate's saved window titles, so editing moves the same windows it opens.
+    private var titles: [String: String] = [:]
     /// Apps asked to open a window this session, so they're only asked once.
     private var opened: Set<String> = []
     /// Finder windows minimized for the empty desktop, restored after.
@@ -29,7 +31,8 @@ final class GateEditor {
         self.store = store
     }
 
-    func open(id: UUID, name: String, layout: GateLayout?, runway: CGRect, onSave: @escaping (Gate) -> Void) {
+    func open(id: UUID, name: String, layout: GateLayout?, titles: [String: String] = [:], runway: CGRect, onSave: @escaping (Gate) -> Void) {
+        self.titles = titles
         finish()
         self.runway = runway
         store.editing = true
@@ -49,8 +52,9 @@ final class GateEditor {
         let panel = OverlayPanel(frame: runway)
         panel.contentView = FirstClickHostingView(rootView: GateOverlay(model: model, live: permissions.accessibility) { [weak self] save in
             if save, let layout = model.layout {
+                let titles = self?.windowTitles(layout) ?? [:]
                 self?.finish()
-                onSave(Gate(id: id, name: model.name, layout: layout))
+                onSave(Gate(id: id, name: model.name, layout: layout, windowTitles: titles))
             } else {
                 self?.cancel()
             }
@@ -152,7 +156,7 @@ final class GateEditor {
             }
             let wasHidden = app.isHidden
             show(app)
-            guard permissions.accessibility, let window = WindowMover.mainWindow(of: app.processIdentifier) else {
+            guard permissions.accessibility, let window = WindowMover.window(of: app.processIdentifier, titled: titles[id]) else {
                 if permissions.accessibility, let minimized = WindowMover.minimizedWindow(of: app.processIdentifier) {
                     AXUIElementSetAttributeValue(minimized, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
                     applyAgain(after: 0.6)
@@ -253,6 +257,16 @@ final class GateEditor {
                 apply(latest)
             }
         }
+    }
+
+    /// Each app's window title as it was placed, so the gate opens the same window next time.
+    private func windowTitles(_ layout: GateLayout) -> [String: String] {
+        var result: [String: String] = [:]
+        for id in layout.leaves {
+            let window = homes[id]?.window ?? running(id).flatMap { WindowMover.window(of: $0.processIdentifier, titled: titles[id]) }
+            if let window, let title = WindowMover.title(of: window), !title.isEmpty { result[id] = title }
+        }
+        return result
     }
 
     /// macOS ignores a background app asking to hide the active one, but Accessibility can hide any

@@ -35,6 +35,31 @@ enum WindowMover {
         return standardWindows(of: pid).first
     }
 
+    /// The app's window whose title shares the most with `title` (a VS Code project, a Chrome
+    /// window's page), or its main window when none do or there's only one.
+    static func window(of pid: pid_t, titled title: String?) -> AXUIElement? {
+        let windows = standardWindows(of: pid)
+        guard let title, windows.count > 1 else { return mainWindow(of: pid) }
+        let wanted = parts(of: title)
+        let scored = windows.map { window -> (AXUIElement, Int) in
+            let have: String = AX.value(window, kAXTitleAttribute) ?? ""
+            return (window, have == title ? 1000 : parts(of: have).intersection(wanted).count)
+        }
+        guard let best = scored.max(by: { $0.1 < $1.1 }), best.1 > 0 else { return mainWindow(of: pid) }
+        return best.0
+    }
+
+    static func title(of window: AXUIElement) -> String? {
+        AX.value(window, kAXTitleAttribute)
+    }
+
+    /// A title's pieces: apps join file, project and app name with dashes or bars.
+    private static func parts(of title: String) -> Set<String> {
+        Set(title.components(separatedBy: CharacterSet(charactersIn: "—–-|·"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.count > 1 })
+    }
+
     static func minimizedWindow(of pid: pid_t) -> AXUIElement? {
         let windows: [AXUIElement] = AX.value(AXUIElementCreateApplication(pid), kAXWindowsAttribute) ?? []
         return windows.first { AX.value($0, kAXMinimizedAttribute) == true }

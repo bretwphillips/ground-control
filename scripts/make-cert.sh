@@ -14,7 +14,7 @@ if ! security find-certificate -c "$name" >/dev/null 2>&1; then
     -keyout "$dir/key.pem" -out "$dir/cert.pem" \
     -addext "keyUsage=critical,digitalSignature" \
     -addext "extendedKeyUsage=critical,codeSigning" 2>/dev/null
-  openssl pkcs12 -export -legacy -passout pass:groundcontrol \
+  openssl pkcs12 -export -legacy -passout pass:groundcontrol -name "$name" \
     -inkey "$dir/key.pem" -in "$dir/cert.pem" -out "$dir/identity.p12"
   security import "$dir/identity.p12" -k "$keychain" -P groundcontrol -T /usr/bin/codesign
   echo "Created \"$name\""
@@ -25,7 +25,10 @@ security find-certificate -c "$name" -p > "$dir/cert.pem"
 security add-trusted-cert -r trustRoot -p codeSign -k "$keychain" "$dir/cert.pem"
 echo "\"$name\" is trusted for code signing"
 
-# Lets codesign use the key without asking on every build ("Always Allow" alone doesn't stick).
-# Asks for your login password once.
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s "$keychain" >/dev/null
-echo "codesign can use it without asking"
+# Lets codesign use this key, and only this one, without asking on every build ("Always Allow"
+# alone doesn't stick). Asks for your login password once.
+if security set-key-partition-list -S apple-tool:,apple:,codesign: -s -l "$name" "$keychain" >/dev/null 2>&1; then
+  echo "codesign can use it without asking"
+else
+  echo "Couldn't find a key labelled \"$name\" (made by an older version of this script); codesign may keep asking."
+fi

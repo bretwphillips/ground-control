@@ -82,7 +82,7 @@ open "build/Ground Control.app"
 
 `make-cert.sh` adds a self-signed "Ground Control Dev" identity to your login keychain and trusts
 it for code signing (it asks for your password). macOS ties permissions to that identity, so they
-carry over when the app is rebuilt, and lets codesign use the key without asking each time.
+carry over when the app is rebuilt. When codesign first asks to use the key, choose Always Allow.
 
 ## Updates
 

@@ -111,6 +111,7 @@ struct SettingsView: View {
                 Toggle("Grow the app you're using", isOn: $settings.squish)
                 if settings.squish {
                     Stepper("Grows by \(Int(settings.squishAmount * 100))%", value: $settings.squishAmount, in: 0.1...0.6, step: 0.05)
+                    Toggle("Animate squish", isOn: $settings.animateSquish)
                 }
                 Stepper(settings.gateGap == 0 ? "No space between apps" : "\(Int(settings.gateGap))pt between apps", value: $settings.gateGap, in: 0...16, step: 2)
                 Picker("Switching gates", selection: $settings.switchSpeed) {

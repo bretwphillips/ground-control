@@ -137,7 +137,8 @@ final class WindowAnimator {
             return
         }
         let start = Date()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { timer in
+        // 30 steps a second gives slow-drawing apps (Slack, VS Code) time to keep up.
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { timer in
             let progress = min(Date().timeIntervalSince(start) / duration, 1)
             // Eases in and out, so the change starts and settles gently.
             let eased = progress < 0.5 ? 2 * progress * progress : 1 - pow(-2 * progress + 2, 2) / 2

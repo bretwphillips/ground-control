@@ -3,7 +3,8 @@ import AppKit
 enum TowerIcon {
     /// A control tower for the menu bar: an antenna, a glazed cab wider than its shaft, and the
     /// shaft flaring to the ground. A template, so it follows the menu bar's appearance.
-    static func image() -> NSImage {
+    /// `stopped` adds a small no-entry sign: a ground stop is on.
+    static func image(stopped: Bool = false) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
             NSColor.black.setFill()
             NSColor.black.setStroke()
@@ -38,10 +39,21 @@ enum TowerIcon {
             shaft.fill()
 
             NSBezierPath(roundedRect: NSRect(x: 4, y: 16.2, width: 10, height: 1.5), xRadius: 0.5, yRadius: 0.5).fill()
+            if stopped {
+                // A no-entry sign in the corner, cut clear of the tower around it.
+                let sign = NSRect(x: 11, y: 10, width: 7, height: 7)
+                NSGraphicsContext.current?.compositingOperation = .clear
+                NSBezierPath(ovalIn: sign.insetBy(dx: -1, dy: -1)).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                NSBezierPath(ovalIn: sign).fill()
+                NSGraphicsContext.current?.compositingOperation = .clear
+                NSBezierPath(rect: NSRect(x: sign.minX + 1.5, y: sign.midY - 0.8, width: sign.width - 3, height: 1.6)).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+            }
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "Ground Control"
+        image.accessibilityDescription = stopped ? "Ground Control, ground stop on" : "Ground Control"
         return image
     }
 }

@@ -68,6 +68,7 @@ final class FlyBy {
     /// up to the longest wait set. Urgent ones and previews always go.
     private func holding(_ waiting: (call: Call, at: Date)) -> Bool {
         guard !waiting.call.urgent, waiting.call.kind != .preview else { return false }
+        if GroundStop.shared.active { return true }
         if settings.meetingMode, meeting.inMeeting { return true }
         let waited = Date().timeIntervalSince(waiting.at)
         return settings.holdWhileFocused && waited < settings.holdMinutes * 60 && focus.isFocused

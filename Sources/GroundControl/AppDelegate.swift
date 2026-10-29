@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var beforeMeeting: UUID?
     private var swipeFingers: AnyCancellable?
     private let updates = Updates()
+    private var groundStopIcon: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = TypingFocus.shared
@@ -72,6 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = TowerIcon.image()
+        // The tower carries a no-entry sign while a ground stop is on.
+        groundStopIcon = GroundStop.shared.$until
+            .receive(on: RunLoop.main)
+            .sink { [weak item] _ in item?.button?.image = TowerIcon.image(stopped: GroundStop.shared.active) }
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
@@ -88,6 +93,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let newGate = NSMenuItem(title: "New Gate…", action: #selector(newGate), keyEquivalent: "")
         newGate.target = self
         menu.addItem(newGate)
+
+        let stop = GroundStop.shared
+        let stops = NSMenu()
+        if stop.active {
+            let end = NSMenuItem(title: "End Ground Stop", action: #selector(endGroundStop), keyEquivalent: "")
+            end.target = self
+            stops.addItem(end)
+        } else {
+            for (title, minutes) in [("For 30 Minutes", 30.0), ("For 1 Hour", 60.0), ("Until Turned Off", -1.0)] {
+                let item = NSMenuItem(title: title, action: #selector(startGroundStop(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = minutes
+                stops.addItem(item)
+            }
+        }
+        let stopItem = NSMenuItem(title: stop.active ? "Ground Stop (\(stop.description))" : "Ground Stop", action: nil, keyEquivalent: "")
+        stopItem.submenu = stops
+        menu.addItem(stopItem)
 
         let desktop = NSMenuItem(title: "Show Desktop", action: #selector(showDesktop), keyEquivalent: "")
         desktop.target = self
@@ -116,6 +139,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             beforeMeeting = nil
             gates.open(previous)
         }
+    }
+
+    @objc private func startGroundStop(_ sender: NSMenuItem) {
+        guard let minutes = sender.representedObject as? Double else { return }
+        GroundStop.shared.start(for: minutes < 0 ? nil : minutes)
+    }
+
+    @objc private func endGroundStop() {
+        GroundStop.shared.end()
     }
 
     @objc private func showDesktop() {

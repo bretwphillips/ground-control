@@ -28,6 +28,21 @@ enum FlyByTrigger: String, CaseIterable {
     }
 }
 
+enum SwitchSpeed: String, CaseIterable {
+    case instant, quick, smooth
+
+    var title: String { rawValue.capitalized }
+
+    /// How long the windows get to settle under the snapshot, and how long it takes to slide away.
+    var timing: (settle: Double, slide: Double)? {
+        switch self {
+        case .instant: nil
+        case .quick: (0.05, 0.14)
+        case .smooth: (0.14, 0.24)
+        }
+    }
+}
+
 enum StripSize: String, CaseIterable {
     case icons, names, large
 
@@ -119,6 +134,9 @@ final class Settings: ObservableObject {
     @Published var gateGap: Double {
         didSet { defaults.set(gateGap, forKey: "gateGap") }
     }
+    @Published var switchSpeed: SwitchSpeed {
+        didSet { defaults.set(switchSpeed.rawValue, forKey: "switchSpeed") }
+    }
     /// Fingers for a sideways swipe that steps through gates; 0 is off.
     @Published var swipeFingers: Int {
         didSet { defaults.set(swipeFingers, forKey: "swipeFingers") }
@@ -173,6 +191,7 @@ final class Settings: ObservableObject {
         squishAmount = defaults.object(forKey: "squishAmount") as? Double ?? 0.25
         autoOpen = defaults.object(forKey: "autoOpen") as? Bool ?? false
         swipeFingers = defaults.object(forKey: "swipeFingers") as? Int ?? 0
+        switchSpeed = SwitchSpeed(rawValue: defaults.string(forKey: "switchSpeed") ?? "") ?? .quick
         gateGap = defaults.object(forKey: "gateGap") as? Double ?? 0
         dismissedPairs = Set(defaults.stringArray(forKey: "dismissedPairs") ?? [])
         shortcuts = defaults.data(forKey: "shortcuts").flatMap { try? JSONDecoder().decode([String: Shortcut].self, from: $0) } ?? [:]

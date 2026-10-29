@@ -4,7 +4,7 @@ import ScreenCaptureKit
 /// Smooths switching gates. Moving other apps' windows frame by frame stutters, so instead a
 /// snapshot of the screen covers it, the gate switches underneath, and the snapshot slides away in
 /// the direction of travel while fading, like moving between desktops. With Reduce Motion it only
-/// fades; without Screen Recording the switch is instant.
+/// fades; set to Instant, or without Screen Recording, the switch is immediate.
 final class Transition {
     static let shared = Transition()
 
@@ -25,7 +25,8 @@ final class Transition {
 
     /// `direction` is -1 or 1 for a gate to the left or right, 0 for one picked directly.
     func run(direction: Int, _ change: @escaping () -> Void) {
-        guard !busy, CGPreflightScreenCaptureAccess(), let screen = NSScreen.screens.first else {
+        guard !busy, let timing = Settings.shared.switchSpeed.timing, CGPreflightScreenCaptureAccess(),
+              let screen = NSScreen.screens.first else {
             change()
             return
         }
@@ -45,12 +46,12 @@ final class Transition {
             change()
 
             // A moment for the windows underneath to settle before the snapshot moves off them.
-            try? await Task.sleep(for: .milliseconds(140))
+            try? await Task.sleep(for: .seconds(timing.settle))
             let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || direction == 0
             var away = screen.frame
             away.origin.x -= CGFloat(direction) * screen.frame.width * 0.25
             await NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.24
+                context.duration = timing.slide
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().alphaValue = 0
                 if !still { panel.animator().setFrame(away, display: true) }

@@ -20,7 +20,17 @@ final class FlyBy {
     private let land: (StripApp) -> Void
     private var flight: Flight?
     /// Waiting to fly: in order, with when each arrived, so a held one isn't kept forever.
-    private var queue: [(call: Call, at: Date)] = []
+    private struct Waiting {
+        var call: Call
+        let at: Date
+        /// How many times the app called while it waited.
+        var count = 1
+        /// Whether it was ever held back, so it belongs in the summary when holding ends.
+        var held = false
+    }
+
+    private var queue: [Waiting] = []
+    private var summary: (panel: SummaryPanel, until: Date)?
     private let focus = FocusWatcher()
     private let meeting: MeetingWatcher
     private var lastFlight: [String: Date] = [:]
@@ -55,18 +65,19 @@ final class FlyBy {
             return
         }
         if let index = queue.firstIndex(where: { $0.call.app.id == app.id }) {
+            queue[index].count += 1
             if call.note != nil || call.urgent { queue[index].call = call }
             return
         }
         // One fly-by a minute per app, so a busy channel can't keep pulling attention away.
         let preview = call.kind == .preview
         if !preview, !call.urgent, let last = lastFlight[app.id], Date().timeIntervalSince(last) < 60 { return }
-        queue.append((call, Date()))
+        queue.append(Waiting(call: call, at: Date()))
     }
 
     /// Whether to keep a waiting fly-by back: during a call, or while the user is deep in one app,
     /// up to the longest wait set. Urgent ones and previews always go.
-    private func holding(_ waiting: (call: Call, at: Date)) -> Bool {
+    private func holding(_ waiting: Waiting) -> Bool {
         guard !waiting.call.urgent, waiting.call.kind != .preview else { return false }
         if GroundStop.shared.active { return true }
         if settings.meetingMode, meeting.inMeeting { return true }
@@ -97,9 +108,45 @@ final class FlyBy {
                     end()
                 }
             }
-        } else if let index = queue.firstIndex(where: { !holding($0) }) {
-            depart(queue.remove(at: index).call)
+        } else if let shown = summary {
+            if Date() >= shown.until, !shown.panel.frame.contains(NSEvent.mouseLocation) { closeSummary() }
+        } else {
+            for index in queue.indices where holding(queue[index]) { queue[index].held = true }
+            let ready = queue.indices.filter { !holding(queue[$0]) }
+            // Several held at once come as one summary instead of one fly-by after another.
+            let released = ready.filter { queue[$0].held }
+            if released.count > 1 {
+                let entries = released.map { queue[$0] }
+                queue.removeAll { waiting in entries.contains { $0.call.app.id == waiting.call.app.id } }
+                showSummary(entries)
+            } else if let index = ready.first {
+                depart(queue.remove(at: index).call)
+            }
         }
+    }
+
+    private func showSummary(_ entries: [Waiting]) {
+        guard let runway = runway() else { return }
+        let rows = entries
+            .sorted { ($0.call.urgent ? 1 : 0, $0.count) > ($1.call.urgent ? 1 : 0, $1.count) }
+            .map { SummaryRow(app: $0.call.app, count: $0.count, urgent: $0.call.urgent, note: $0.call.note) }
+        let panel = SummaryPanel(rows: rows) { [weak self] app in
+            self?.land(app)
+            self?.closeSummary()
+        } close: { [weak self] in
+            self?.closeSummary()
+        }
+        let size = CGSize(width: 340, height: CGFloat(rows.count) * 44 + 40)
+        panel.setFrame(CGRect(x: runway.maxX - size.width - 12, y: runway.maxY - size.height - 12, width: size.width, height: size.height), display: true)
+        panel.orderFrontRegardless()
+        summary = (panel, Date() + settings.flyBySeconds * 2)
+        entries.forEach { lastFlight[$0.call.app.id] = Date() }
+        log.notice("fly-by summary of \(rows.count) apps")
+    }
+
+    private func closeSummary() {
+        summary?.panel.orderOut(nil)
+        summary = nil
     }
 
     private func depart(_ call: Call) {
@@ -237,5 +284,80 @@ private struct FlyByView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.red.opacity(0.6), lineWidth: 1.5))
         .contentShape(Rectangle())
         .onTapGesture(perform: onClick)
+    }
+}
+
+
+struct SummaryRow: Identifiable {
+    let app: StripApp
+    let count: Int
+    let urgent: Bool
+    let note: String?
+
+    var id: String { app.id }
+}
+
+/// What came in while fly-bys were held, as one panel: each app once, urgent first.
+final class SummaryPanel: NSPanel {
+    init(rows: [SummaryRow], pick: @escaping (StripApp) -> Void, close: @escaping () -> Void) {
+        super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        level = .floating
+        collectionBehavior = [.canJoinAllSpaces, .stationary]
+        isFloatingPanel = true
+        hidesOnDeactivate = false
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        contentView = FirstClickHostingView(rootView: SummaryView(rows: rows, pick: pick, close: close))
+    }
+
+    override var canBecomeKey: Bool { false }
+}
+
+private struct SummaryView: View {
+    let rows: [SummaryRow]
+    let pick: (StripApp) -> Void
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("While you were holding").font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Button(action: close) { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            ForEach(rows) { row in
+                HStack(spacing: 8) {
+                    Image(nsImage: row.app.icon).resizable().frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 4) {
+                            Text(row.app.name).font(.system(size: 12, weight: .medium))
+                            if row.urgent {
+                                Text("urgent").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                                    .padding(.horizontal, 4).background(Capsule().fill(.red))
+                            }
+                        }
+                        if let note = row.note {
+                            Text(note).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    if row.count > 1 {
+                        Text("×\(row.count)").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .contentShape(Rectangle())
+                .onTapGesture { pick(row.app) }
+            }
+        }
+        .padding(.bottom, 6)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

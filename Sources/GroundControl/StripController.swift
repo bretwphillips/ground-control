@@ -150,10 +150,11 @@ final class StripController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in self?.tick() }
     }
 
-    /// Where landed apps go.
+    /// Where landed apps go. Editing a gate brings the strip out even when it hides, so the
+    /// editor gets the runway beside it, not the whole screen over it.
     func runway() -> CGRect? {
         guard let screen = NSScreen.screens.first else { return nil }
-        return reserves ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
+        return reserves || gates.store.editing ? split()?.runway ?? screen.visibleFrame : screen.visibleFrame
     }
 
     /// The strip's slice of the screen and the runway left over for the landed app.

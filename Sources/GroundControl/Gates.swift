@@ -581,7 +581,9 @@ final class GateController {
     }
 
     private func edit(id: UUID, name: String, layout: GateLayout?) {
-        guard let runway = runway() else { return }
+        // Editing first, so the runway is asked for with the strip out.
+        store.editing = true
+        guard let runway = runway() else { store.editing = false; return }
         let titles = store.gates.first(where: { $0.id == id })?.windowTitles ?? [:]
         editor.open(id: id, name: name, layout: layout, titles: titles, runway: runway) { [weak self] saved in
             self?.store.save(saved)

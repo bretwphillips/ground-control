@@ -11,7 +11,8 @@ final class SwipeWatcher {
 
     static let shared = SwipeWatcher()
 
-    private var startX: Float?
+    /// Where each finger was when the swipe began, by the framework's id for it.
+    private var begun: (at: Double, points: [Int32: MTPoint])?
     private var fired = false
     private var started = false
 
@@ -37,24 +38,35 @@ final class SwipeWatcher {
         log.notice("swipes: watching \(devices.count) trackpad(s), touch size \(MemoryLayout<MTTouch>.stride)")
     }
 
-    /// Fires once per swipe, when the fingers' average has moved a tenth of the trackpad sideways.
-    /// A finger briefly lifting or landing mid-swipe doesn't start it over; lifting them all does.
+    /// Fires once per swipe: the same fingers all moving one way, mostly sideways, a tenth of the
+    /// trackpad on average within a moment. A finger landing or lifting starts it over, so a thumb
+    /// or palm joining a scroll isn't measured against where the scroll began; lifting them all
+    /// allows the next swipe.
     fileprivate func frame(_ touches: UnsafeMutablePointer<MTTouch>?, count: Int) {
         guard fingers > 0, let touches, count > 0 else {
-            startX = nil
+            begun = nil
             fired = false
             return
         }
-        guard count == fingers else { return }
-        let x = (0..<count).reduce(Float(0)) { $0 + touches[$1].normalized.position.x } / Float(count)
-        guard let start = startX else {
-            startX = x
+        guard count == fingers else {
+            begun = nil
             return
         }
-        guard !fired, abs(x - start) > 0.1 else { return }
+        let now = touches[0].timestamp
+        let points = Dictionary((0..<count).map { (touches[$0].identifier, touches[$0].normalized.position) }) { a, _ in a }
+        guard !fired else { return }
+        guard let begun, Set(begun.points.keys) == Set(points.keys), now - begun.at < 0.6 else {
+            self.begun = (now, points)
+            return
+        }
+        let moves = points.compactMap { id, p in begun.points[id].map { (dx: p.x - $0.x, dy: p.y - $0.y) } }
+        let dx = moves.reduce(Float(0)) { $0 + $1.dx } / Float(moves.count)
+        let dy = moves.reduce(Float(0)) { $0 + $1.dy } / Float(moves.count)
+        guard abs(dx) > 0.1, abs(dx) > 2 * abs(dy),
+              moves.allSatisfy({ $0.dx * dx > 0 && abs($0.dx) > 0.04 }) else { return }
         fired = true
         // Like moving between desktops: swiping left brings the next one in from the right.
-        let step = x < start ? 1 : -1
+        let step = dx < 0 ? 1 : -1
         DispatchQueue.main.async { self.onSwipe?(step) }
     }
 }

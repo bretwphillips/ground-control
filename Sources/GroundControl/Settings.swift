@@ -37,7 +37,7 @@ enum SwitchSpeed: String, CaseIterable {
     var timing: (settle: Double, slide: Double)? {
         switch self {
         case .instant: nil
-        case .quick: (0.05, 0.14)
+        case .quick: (0.04, 0.12)
         case .smooth: (0.14, 0.24)
         }
     }

@@ -312,6 +312,8 @@ final class GateController {
     private var titles: [String: String] = [:]
     private let windowHints = WindowHints()
     private var dragPending = false
+    /// Changes with every open, so an earlier one's late activations and retries stand down.
+    private var opening = UUID()
 
     init(store: GateStore, permissions: Permissions, settings: Settings, runway: @escaping () -> CGRect?) {
         self.store = store
@@ -530,6 +532,8 @@ final class GateController {
     /// `focus` is the app to end up in front; by default the app in front keeps focus if it's in
     /// the gate, otherwise the gate's first app gets it.
     func open(_ gate: Gate, focus wanted: String? = nil) {
+        let opening = UUID()
+        self.opening = opening
         store.current = gate.id
         titles = gate.windowTitles ?? [:]
         openedAt = Date()
@@ -544,6 +548,17 @@ final class GateController {
         let frames = shown.map { windowFrames($0, in: runway) } ?? []
         var order = frames.filter { $0.id != focus }
         order += frames.filter { $0.id == focus }
+        // Every other app steps aside rather than showing wherever this gate doesn't cover, and
+        // the gate's own come back if that hid them, before their windows are looked for. Finder
+        // stays, as it draws the desktop.
+        let own = Bundle.main.bundleIdentifier
+        let others = NSWorkspace.shared.runningApplications.compactMap { app -> String? in
+            guard app.activationPolicy == .regular, let id = app.bundleIdentifier,
+                  id != own, id != "com.apple.finder", !leaves.contains(id) else { return nil }
+            return id
+        }
+        setHidden(others, true)
+        setHidden(leaves, false)
 
         // Each activation brings that app's main window forward; the short gaps keep macOS from
         // reordering them.
@@ -557,13 +572,28 @@ final class GateController {
                 continue
             }
             place(id, in: frame, attempts: 6)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { app.activate() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                if self?.opening == opening { app.activate() }
+            }
             delay += 0.04
         }
         log.notice("gate: \(gate.name, privacy: .public)")
-        if let focus { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { TypingFocus.shared.restore(focus) } }
+        if let focus {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                if self?.opening == opening { TypingFocus.shared.restore(focus) }
+            }
+        }
         // Seams show once the apps have come forward.
         DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.3) { [weak self] in self?.refreshSeams() }
+    }
+
+    /// Hides or shows running apps, through Accessibility so the one in front can be hidden too.
+    private func setHidden(_ ids: [String], _ hidden: Bool) {
+        guard permissions.accessibility else { return }
+        for id in ids {
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first, app.isHidden != hidden else { continue }
+            AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, hidden ? kCFBooleanTrue : kCFBooleanFalse)
+        }
     }
 
     /// The gate an app belongs to: the open one if it's there, otherwise the first that has it.
@@ -596,9 +626,11 @@ final class GateController {
     /// reached and is left there.
     private func place(_ id: String, in frame: CGRect, attempts: Int) {
         guard permissions.accessibility, attempts > 0 else { return }
+        let opening = self.opening
         let retry = { [weak self] (delay: Double) in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                self?.place(id, in: frame, attempts: attempts - 1)
+                guard let self, self.opening == opening else { return }
+                self.place(id, in: frame, attempts: attempts - 1)
             }
         }
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first else {

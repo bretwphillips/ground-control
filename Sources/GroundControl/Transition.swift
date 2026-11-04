@@ -43,6 +43,9 @@ final class Transition {
             panel.alphaValue = 1
             panel.setFrame(screen.frame, display: true)
             panel.orderFrontRegardless()
+            // Hiding and showing apps takes effect at once, so the snapshot has to be on screen
+            // before the switch, or it flashes through.
+            try? await Task.sleep(for: .milliseconds(20))
             change()
 
             // A moment for the windows underneath to settle before the snapshot moves off them.

@@ -532,7 +532,6 @@ final class GateController {
     /// `focus` is the app to end up in front; by default the app in front keeps focus if it's in
     /// the gate, otherwise the gate's first app gets it.
     func open(_ gate: Gate, focus wanted: String? = nil) {
-        let last = (store.current ?? store.previous).flatMap { id in store.gates.first { $0.id == id } }
         let opening = UUID()
         self.opening = opening
         store.current = gate.id
@@ -549,9 +548,16 @@ final class GateController {
         let frames = shown.map { windowFrames($0, in: runway) } ?? []
         var order = frames.filter { $0.id != focus }
         order += frames.filter { $0.id == focus }
-        // The last gate's other apps step aside rather than showing wherever this one doesn't cover.
-        if let last, last.id != gate.id { setHidden(last.layout.leaves.filter { !leaves.contains($0) }, true) }
-        // and this gate's own come back if that hid them, before their windows are looked for.
+        // Every other app steps aside rather than showing wherever this gate doesn't cover, and
+        // the gate's own come back if that hid them, before their windows are looked for. Finder
+        // stays, as it draws the desktop.
+        let own = Bundle.main.bundleIdentifier
+        let others = NSWorkspace.shared.runningApplications.compactMap { app -> String? in
+            guard app.activationPolicy == .regular, let id = app.bundleIdentifier,
+                  id != own, id != "com.apple.finder", !leaves.contains(id) else { return nil }
+            return id
+        }
+        setHidden(others, true)
         setHidden(leaves, false)
 
         // Each activation brings that app's main window forward; the short gaps keep macOS from

@@ -41,8 +41,8 @@ final class FocusWatcher {
     }
 }
 
-/// Notices calls: the microphone or a camera in use by any app. Asks only whether they're running,
-/// which needs no permission.
+/// Notices calls: the microphone or a camera in use by an app. Asks only which processes are
+/// listening, which needs no permission.
 final class MeetingWatcher {
     private(set) var inMeeting = false
     var onChange: ((Bool) -> Void)?
@@ -65,22 +65,47 @@ final class MeetingWatcher {
         onChange?(live)
     }
 
+    /// Whether an app is listening. macOS listens too without anyone on a call (System Settings'
+    /// input meter, dictation, Siri), so its own processes count only when they're apps (FaceTime).
     private static func microphoneInUse() -> Bool {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mSelector: kAudioHardwarePropertyProcessObjectList,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var device = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device) == noErr else {
-            return false
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr else { return false }
+        var processes = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(system, &address, 0, nil, &size, &processes) == noErr else { return false }
+        return processes.contains { process in
+            guard read(process, kAudioProcessPropertyIsRunningInput, as: UInt32(0)) != 0 else { return false }
+            let pid = read(process, kAudioProcessPropertyPID, as: pid_t(0))
+            if NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular { return true }
+            // A browser or call app listens from a helper process, which isn't an app itself.
+            var bundle: Unmanaged<CFString>?
+            var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyBundleID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            guard AudioObjectGetPropertyData(process, &address, 0, nil, &size, &bundle) == noErr,
+                  let id = bundle?.takeRetainedValue() as String?, !id.isEmpty else { return false }
+            return !id.hasPrefix("com.apple.")
         }
-        address.mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere
-        var running: UInt32 = 0
-        size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &running) == noErr else { return false }
-        return running != 0
+    }
+
+    private static func read<T: BitwiseCopyable>(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, as initial: T) -> T {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value = initial
+        var size = UInt32(MemoryLayout<T>.size)
+        AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value)
+        return value
     }
 
     private static func cameraInUse() -> Bool {

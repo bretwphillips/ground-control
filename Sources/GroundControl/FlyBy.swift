@@ -75,13 +75,14 @@ final class FlyBy {
         queue.append(Waiting(call: call, at: Date()))
     }
 
-    /// Whether to keep a waiting fly-by back: during a call, or while the user is deep in one app,
-    /// up to the longest wait set. Urgent ones and previews always go.
+    /// Whether to keep a waiting fly-by back: during a call (for up to two hours, so a microphone
+    /// left on can't hold them for good), or while the user is deep in one app, up to the longest
+    /// wait set. Urgent ones and previews always go.
     private func holding(_ waiting: Waiting) -> Bool {
         guard !waiting.call.urgent, waiting.call.kind != .preview else { return false }
         if GroundStop.shared.active { return true }
-        if settings.meetingMode, meeting.inMeeting { return true }
         let waited = Date().timeIntervalSince(waiting.at)
+        if settings.meetingMode, meeting.inMeeting, waited < 2 * 60 * 60 { return true }
         return settings.holdWhileFocused && waited < settings.holdMinutes * 60 && focus.isFocused
     }
 

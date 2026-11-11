@@ -298,6 +298,13 @@ final class GateController {
     private var openedAt = Date.distantPast
     /// Where the open gate's windows settled, to notice when one is moved away.
     private var settled: [String: CGRect] = [:]
+    /// Apps in the open gate whose window can't be resized, so it keeps whatever size it chooses.
+    private var fixedSize: Set<String> = []
+    /// Asleep or locked: windows can't be placed or hidden for sure, and app switches are macOS's.
+    private var asleep = false
+    private var locked = false
+    private var away: Bool { asleep || locked }
+    private var observers: [NSObjectProtocol] = []
     /// Apps asked to reopen while this gate opened, so each is only asked once.
     private var reopened: Set<String> = []
 
@@ -336,6 +343,38 @@ final class GateController {
             drag: { [weak self] seam, point in self?.drag(seam, to: point) },
             end: { [weak self] in self?.endDrag() }
         )
+        let workspace = NSWorkspace.shared.notificationCenter
+        let screens = DistributedNotificationCenter.default()
+        let watch: [(NotificationCenter, String, (GateController) -> Void)] = [
+            (workspace, NSWorkspace.screensDidSleepNotification.rawValue, { $0.asleep = true }),
+            (workspace, NSWorkspace.screensDidWakeNotification.rawValue, { $0.asleep = false }),
+            (screens, "com.apple.screenIsLocked", { $0.locked = true }),
+            (screens, "com.apple.screenIsUnlocked", { $0.locked = false }),
+        ]
+        for (center, name, change) in watch {
+            observers.append(center.addObserver(forName: Notification.Name(name), object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                let wasAway = away
+                change(self)
+                if wasAway, !away { back() }
+            })
+        }
+    }
+
+    /// Back from sleep or the lock screen: whatever opened or moved meanwhile may not have taken,
+    /// so the open gate (or the gate of the app in front) is laid out again once things settle.
+    private func back() {
+        log.notice("gate: back from sleep")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, !away, permissions.accessibility, !store.editing, !desktop.showing else { return }
+            let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            let current = self.store.current
+            if let gate = store.gates.first(where: { $0.id == current }) {
+                open(gate, focus: front)
+            } else if settings.autoOpen, let front, let gate = gate(for: front), !gate.isParked {
+                open(gate, focus: front)
+            }
+        }
     }
 
     private var gap: CGFloat { CGFloat(settings.gateGap) }
@@ -433,7 +472,7 @@ final class GateController {
     /// auto-open on, switching to an app that belongs to another gate opens that gate.
     func focusChanged() {
         // Opening a gate activates each of its apps in turn; those switches aren't the user's.
-        guard permissions.accessibility, !store.editing, Date().timeIntervalSince(openedAt) > 0.6,
+        guard permissions.accessibility, !store.editing, !away, Date().timeIntervalSince(openedAt) > 0.6,
               let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return }
         let current = store.gates.first { $0.id == store.current }
         if let current, current.layout.leaves.contains(front) {
@@ -457,7 +496,8 @@ final class GateController {
             // The new arrangement is where the windows belong now.
             settled = [:]
             openedAt = Date().addingTimeInterval(-2.5)
-        } else if settings.autoOpen, let gate = gate(for: front) {
+        } else if settings.autoOpen, let gate = gate(for: front), !gate.isParked {
+            // Hangar gates open only when picked, like with swipes and step keys.
             open(gate, focus: front)
         }
     }
@@ -596,10 +636,11 @@ final class GateController {
         }
     }
 
-    /// The gate an app belongs to: the open one if it's there, otherwise the first that has it.
+    /// The gate an app belongs to: the open one if it's there, otherwise the first everyday gate
+    /// that has it, and only then one in the hangar.
     func gate(for id: String) -> Gate? {
         let gates = store.gates.filter { $0.layout.leaves.contains(id) }
-        return gates.first { $0.id == store.current } ?? gates.first
+        return gates.first { $0.id == store.current } ?? gates.first { !$0.isParked } ?? gates.first
     }
 
     func newGate() {
@@ -707,28 +748,47 @@ final class GateController {
     /// minimized, hidden, full screen or closed. Clicking the gate puts it all back.
     func checkDrift() {
         // Showing the desktop hides the gate's apps for a moment; that isn't them moving away.
-        guard permissions.accessibility, dragBase == nil, !desktop.showing, !WindowAnimator.shared.moving,
+        guard permissions.accessibility, dragBase == nil, !desktop.showing, !away, !WindowAnimator.shared.moving,
               let id = store.current, Date().timeIntervalSince(openedAt) > 3,
               let gate = store.gates.first(where: { $0.id == id }) else { return }
         if settled.isEmpty {
             // Windows still nowhere to be seen by now (another desktop) don't count.
+            fixedSize = []
             for appID in gate.layout.leaves {
                 settled[appID] = currentFrame(of: appID)
+                if isFixedSize(appID) { fixedSize.insert(appID) }
             }
             return
         }
         for (appID, frame) in settled {
-            guard let current = currentFrame(of: appID),
-                  abs(current.minX - frame.minX) < 8, abs(current.minY - frame.minY) < 8,
+            guard let current = currentFrame(of: appID) else {
+                letGo(appID)
+                return
+            }
+            // A window that can't be resized sizes and moves itself (D-Pet does); only it going
+            // away lets go.
+            if fixedSize.contains(appID) { continue }
+            guard abs(current.minX - frame.minX) < 8, abs(current.minY - frame.minY) < 8,
                   abs(current.width - frame.width) < 8, abs(current.height - frame.height) < 8 else {
-                log.notice("gate: let go, \(appID, privacy: .public) moved")
-                store.current = nil
-                settled = [:]
-                shown = nil
-                refreshSeams()
+                letGo(appID)
                 return
             }
         }
+    }
+
+    private func letGo(_ appID: String) {
+        log.notice("gate: let go, \(appID, privacy: .public) moved")
+        store.current = nil
+        settled = [:]
+        shown = nil
+        refreshSeams()
+    }
+
+    private func isFixedSize(_ id: String) -> Bool {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
+              let window = window(id, app.processIdentifier) else { return false }
+        var settable: DarwinBoolean = true
+        return AXUIElementIsAttributeSettable(window, kAXSizeAttribute as CFString, &settable) == .success && !settable.boolValue
     }
 
     /// The window this gate uses for an app: the one saved with it, by title.

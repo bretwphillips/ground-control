@@ -33,10 +33,6 @@ final class StripController {
     private var revealed = false
     private var revealedForKeys = false
     private var flashUntil = Date.distantPast
-    private var hoverSince: Date?
-    /// The last click anywhere. Clicks under the hidden airspace are work in the app there.
-    private var lastClick = Date.distantPast
-    private var clickMonitor: Any?
     private var lastNear = Date.distantPast
 
     private(set) var gates: GateController!
@@ -130,17 +126,16 @@ final class StripController {
             }
             .store(in: &cancellables)
 
-        // Mouse clicks elsewhere can be watched without a permission; only keys need one.
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.lastClick = Date()
-        }
-
         place()
     }
 
     /// With Accessibility, the strip keeps its slice of the screen clear. Without it, it can't move
     /// windows aside, so it hides until the pointer reaches its edge instead of covering them.
     private var reserves: Bool { settings.keepClear && permissions.accessibility && !settings.autoHide }
+
+    /// A fly-by is what says an app is calling when it can show one; otherwise the strip comes out
+    /// so the calling tile's ring can be seen.
+    private var flyBysShow: Bool { settings.flyBy && settings.flyByPreview && permissions.screenRecording }
 
     /// Brings a hidden strip out for a moment, so a shortcut or swipe shows where it landed.
     func flash() {
@@ -176,7 +171,8 @@ final class StripController {
             // Full-screen windows can't be resized, so the strip steps aside on their desktops.
             shown = false
         } else {
-            shown = reserves || revealed || revealedForKeys || Date() < flashUntil || !tracker.calling.isEmpty || gates.store.editing
+            shown = reserves || revealed || revealedForKeys || Date() < flashUntil || gates.store.editing
+                || (!tracker.calling.isEmpty && !flyBysShow)
         }
         if shown != panel.isVisible {
             shown ? panel.orderFrontRegardless() : panel.orderOut(nil)
@@ -188,7 +184,8 @@ final class StripController {
     }
 
     /// Without a reserved slice, pushing the pointer to the screen's edge reveals the strip, and it
-    /// hides again shortly after the pointer leaves it.
+    /// hides again shortly after the pointer leaves it. Only the edge does: the strip's area is the
+    /// windows' own there, and the pointer resting on it is work in them.
     private func trackPointer() {
         guard !reserves, let strip = split()?.strip, let screen = NSScreen.screens.first?.frame else {
             revealed = false
@@ -204,18 +201,8 @@ final class StripController {
         // The strip plus the gap out to the screen's edge, the menu bar included.
         let zone = strip.union(screen.divided(atDistance: 1, from: settings.edge.rectEdge).slice).insetBy(dx: -2, dy: -2)
 
-        // Auto-hidden, resting on where the strip lives brings it out too. The pause is long enough
-        // to click a window's buttons or tabs underneath without it appearing.
-        let resting = settings.autoHide && strip.contains(mouse)
-        // Clicking there (closing tabs, say) is using the app underneath, so each click starts the
-        // wait over, and it comes out only after a second without one.
-        if NSEvent.pressedMouseButtons != 0 { lastClick = Date() }
-        let clicking = Date().timeIntervalSince(lastClick) < 1
-        hoverSince = resting && !clicking ? hoverSince ?? Date() : nil
-        let hovered = hoverSince.map { Date().timeIntervalSince($0) > 0.6 } ?? false
-
-        if atEdge || hovered || (revealed && zone.contains(mouse)) { lastNear = Date() }
-        let shouldReveal = atEdge || hovered || (revealed && Date().timeIntervalSince(lastNear) < 0.4)
+        if atEdge || (revealed && zone.contains(mouse)) { lastNear = Date() }
+        let shouldReveal = atEdge || (revealed && Date().timeIntervalSince(lastNear) < 0.4)
         guard shouldReveal != revealed else { return }
         revealed = shouldReveal
         tick()

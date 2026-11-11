@@ -76,7 +76,7 @@ struct SettingsView: View {
                 }
                 Toggle("Hide the airspace until you need it", isOn: $settings.autoHide)
                 if settings.autoHide {
-                    note("Apps get the whole screen. The airspace comes out at its edge, while ⌃⌥ is held, briefly after a gate shortcut or swipe, and during a fly-by.")
+                    note("Apps get the whole screen. The airspace comes out at its edge, while ⌃⌥ is held, briefly after a gate shortcut or swipe, and when an app calls with no fly-by to show it.")
                 }
                 Toggle("Keep windows out from under the airspace", isOn: $settings.keepClear)
                 if settings.keepClear {

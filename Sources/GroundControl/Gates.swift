@@ -528,12 +528,33 @@ final class GateController {
     /// Opens the gate `step` places along the strip from the open one, wrapping around the ends.
     /// With none open it starts from the last one that was.
     func step(by step: Int) {
-        // Parked gates are passed by.
+        guard let gate = neighbour(by: step) else { return }
+        switchTo(gate, direction: step)
+    }
+
+    /// The gate `step` places along the strip from the open one, wrapping around; parked gates are
+    /// passed by.
+    func neighbour(by step: Int) -> Gate? {
         let gates = store.active
-        guard !gates.isEmpty else { return }
+        guard !gates.isEmpty else { return nil }
         let from = gates.firstIndex { $0.id == (store.current ?? store.previous) }
         let index = from.map { (($0 + step) % gates.count + gates.count) % gates.count } ?? 0
-        switchTo(gates[index], direction: step)
+        return gates[index]
+    }
+
+    /// Which way a gate lies along the strip from the open one: -1, 1, or 0 when it can't tell.
+    func direction(to gate: Gate) -> Int {
+        let from = store.gates.firstIndex { $0.id == store.current }
+        let to = store.gates.firstIndex { $0.id == gate.id }
+        return from.flatMap { from in to.map { $0 > from ? 1 : $0 < from ? -1 : 0 } } ?? 0
+    }
+
+    /// Where each of the gate's windows would go, in AX coordinates, for drawing it without
+    /// opening it.
+    func frames(of gate: Gate) -> [(id: String, title: String?, frame: CGRect)] {
+        guard let runway = runway().map(WindowMover.axFrame) else { return [] }
+        let titles = gate.windowTitles ?? [:]
+        return windowFrames(gate.layout, in: runway).map { (id: $0.id, title: titles[$0.id], frame: $0.frame) }
     }
 
     /// Opens a gate the user picked (a tile, a number, a step or a swipe) with the transition,
@@ -561,12 +582,6 @@ final class GateController {
         let next = leaves[((from + step) % leaves.count + leaves.count) % leaves.count]
         NSRunningApplication.runningApplications(withBundleIdentifier: next).first?.activate()
         TypingFocus.shared.restore(next)
-    }
-
-    /// Flips back to the gate open before this one.
-    func openPrevious() {
-        guard let target = store.previous, let gate = store.gates.first(where: { $0.id == target }) else { return }
-        switchTo(gate)
     }
 
     /// `focus` is the app to end up in front; by default the app in front keeps focus if it's in

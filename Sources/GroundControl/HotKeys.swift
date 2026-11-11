@@ -13,6 +13,8 @@ final class HotKeys: ObservableObject {
     @Published private(set) var taken: Set<ShortcutAction> = []
 
     var onAction: ((Action) -> Void)?
+    /// The shortcut's key let go, for the ones that do something while held.
+    var onRelease: ((Action) -> Void)?
 
     private let settings: Settings
     private var actions: [UInt32: Action] = [:]
@@ -22,7 +24,10 @@ final class HotKeys: ObservableObject {
 
     init(settings: Settings) {
         self.settings = settings
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        var specs = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased)),
+        ]
         InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
             guard let event, let context else { return noErr }
             var id = EventHotKeyID()
@@ -31,9 +36,14 @@ final class HotKeys: ObservableObject {
                 nil, MemoryLayout<EventHotKeyID>.size, nil, &id
             )
             let keys = Unmanaged<HotKeys>.fromOpaque(context).takeUnretainedValue()
-            if let action = keys.actions[id.id] { keys.onAction?(action) }
+            guard let action = keys.actions[id.id] else { return noErr }
+            if GetEventKind(event) == UInt32(kEventHotKeyReleased) {
+                keys.onRelease?(action)
+            } else {
+                keys.onAction?(action)
+            }
             return noErr
-        }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
+        }, 2, &specs, Unmanaged.passUnretained(self).toOpaque(), &handler)
 
         cancellable = settings.$shortcuts
             .receive(on: RunLoop.main)

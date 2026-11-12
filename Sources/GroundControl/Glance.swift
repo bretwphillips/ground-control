@@ -18,6 +18,10 @@ final class Glance {
     private var visible = false
     /// Changes with every glance, so an earlier one's captures stand down.
     private var session = UUID()
+    /// The glance whose pictures are still live. Going through freezes them: the real apps
+    /// coming forward underneath redraw blank for a moment, which a capture would show.
+    private var feed = UUID()
+    private let desktop = CALayer()
 
     init(gates: GateController, previews: Previews) {
         self.gates = gates
@@ -48,6 +52,7 @@ final class Glance {
         self.direction = direction == 0 ? 1 : direction
         progress = 0
         session = UUID()
+        feed = session
         guard CGPreflightScreenCaptureAccess(), let screen = NSScreen.screens.first else { return }
         visible = true
         build(gate, on: screen)
@@ -88,6 +93,7 @@ final class Glance {
             // The real gate opens under the picture of it, which goes once the apps have come
             // forward and redrawn. Fading would show them blink through it, and the windows'
             // bars change colour as they take focus; a cut is like clicking into them.
+            feed = UUID()
             gates.open(gate)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self, self.session == session else { return }
@@ -115,7 +121,7 @@ final class Glance {
         let bounds = CGRect(origin: .zero, size: screen.frame.size)
         slide.frame = bounds
 
-        let desktop = CALayer()
+        desktop.contents = nil
         desktop.frame = bounds
         desktop.contentsGravity = .resizeAspectFill
         desktop.masksToBounds = true
@@ -168,13 +174,30 @@ final class Glance {
         CATransaction.commit()
     }
 
-    /// Keeps the windows live for as long as the glance lasts.
+    /// Keeps the windows live for as long as the glance lasts, over the desktop as it is now,
+    /// icons and all.
     private func watch(_ session: UUID) {
         guard let gate else { return }
         let frames = gates.frames(of: gate)
         let scale = NSScreen.screens.first?.backingScaleFactor ?? 2
         Task { @MainActor [weak self] in
-            guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false) else { return }
+            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else { return }
+            if let display = content.displays.first(where: { $0.frame.origin == .zero }) ?? content.displays.first {
+                // The wallpaper and desktop icons sit below every window.
+                let below = content.windows.filter { $0.windowLayer < 0 && $0.isOnScreen }
+                let config = SCStreamConfiguration()
+                config.width = Int(display.frame.width * scale)
+                config.height = Int(display.frame.height * scale)
+                config.showsCursor = false
+                if let image = try? await SCScreenshotManager.captureImage(
+                    contentFilter: SCContentFilter(display: display, including: below), configuration: config
+                ), let self, self.feed == session {
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true)
+                    self.desktop.contents = image
+                    CATransaction.commit()
+                }
+            }
             var targets: [(id: String, filter: SCContentFilter, config: SCStreamConfiguration)] = []
             for (id, title, frame) in frames {
                 guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: id).first?.processIdentifier else { continue }
@@ -186,10 +209,10 @@ final class Glance {
                 config.showsCursor = false
                 targets.append((id, SCContentFilter(desktopIndependentWindow: window), config))
             }
-            while let self, self.session == session {
+            while let self, self.feed == session {
                 for target in targets {
                     guard let image = try? await SCScreenshotManager.captureImage(contentFilter: target.filter, configuration: target.config),
-                          self.session == session else { continue }
+                          self.feed == session else { continue }
                     CATransaction.begin()
                     CATransaction.setDisableActions(true)
                     self.windows[target.id]?.sublayers?.forEach { $0.removeFromSuperlayer() }

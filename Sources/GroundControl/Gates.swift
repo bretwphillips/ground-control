@@ -550,11 +550,15 @@ final class GateController {
     }
 
     /// Where each of the gate's windows would go, in AX coordinates, for drawing it without
-    /// opening it.
+    /// opening it: squished toward the app that would end up in front, as opening it does.
     func frames(of gate: Gate) -> [(id: String, title: String?, frame: CGRect)] {
         guard let runway = runway().map(WindowMover.axFrame) else { return [] }
         let titles = gate.windowTitles ?? [:]
-        return windowFrames(gate.layout, in: runway).map { (id: $0.id, title: titles[$0.id], frame: $0.frame) }
+        let leaves = gate.layout.leaves
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let focus = leaves.first { $0 == front } ?? leaves.first
+        return windowFrames(layout(of: gate, focus: focus, in: runway), in: runway)
+            .map { (id: $0.id, title: titles[$0.id], frame: $0.frame) }
     }
 
     /// Opens a gate the user picked (a tile, a number, a step or a swipe) with the transition,

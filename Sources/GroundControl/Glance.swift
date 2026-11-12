@@ -109,6 +109,11 @@ final class Glance {
     /// The desktop picture with the gate's windows where opening it would put them, first from
     /// the last previews, then live.
     private func build(_ gate: Gate, on screen: NSScreen) {
+        // Set up where it is; animating from where the last glance ended would flash it on screen.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        slide.removeAllAnimations()
         slide.sublayers?.forEach { $0.removeFromSuperlayer() }
         windows = [:]
         let bounds = CGRect(origin: .zero, size: screen.frame.size)

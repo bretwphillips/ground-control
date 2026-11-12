@@ -8,7 +8,7 @@ final class SwipeWatcher {
     enum Scrub {
         /// Toward the gate this many places along: 1 for a swipe to the left, -1 to the right.
         case began(Int)
-        /// How far, 0 to 1, a third of the trackpad being all the way.
+        /// How far, 0 to 1, a fifth of the trackpad past where it started being all the way.
         case moved(CGFloat)
         /// Lifted: whether it went far enough, or fast enough, to go there.
         case ended(commit: Bool)
@@ -78,7 +78,7 @@ final class SwipeWatcher {
 
         if var current = scrub {
             // Like moving between desktops: swiping left brings the next one in from the right.
-            let progress = min(max(-dx * Float(current.step) / 0.33, 0), 1)
+            let progress = Self.progress(-dx * Float(current.step))
             let elapsed = Float(now - current.at)
             if elapsed > 0 { current.speed = current.speed * 0.5 + (progress - current.progress) / elapsed * 0.5 }
             current.progress = progress
@@ -94,12 +94,17 @@ final class SwipeWatcher {
         guard abs(dx) > 0.03, abs(dx) > 2 * abs(dy),
               moves.allSatisfy({ $0.dx * dx > 0 && abs($0.dx) > 0.015 }) else { return }
         let step = dx < 0 ? 1 : -1
-        let progress = min(abs(dx) / 0.33, 1)
+        let progress = Self.progress(abs(dx))
         scrub = (step, progress, now, 0)
         DispatchQueue.main.async {
             self.onScrub?(.began(step))
             self.onScrub?(.moved(CGFloat(progress)))
         }
+    }
+
+    /// Counted from where the swipe was noticed, so the gate starts from the edge, not partway in.
+    private static func progress(_ distance: Float) -> Float {
+        min(max((distance - 0.03) / 0.2, 0), 1)
     }
 
     /// Past halfway goes there; so does a flick still moving that way as it lifts.

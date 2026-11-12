@@ -35,6 +35,8 @@ final class Glance {
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
+        // macOS shrinks and fades panels as they close; the glance has to go in one frame.
+        panel.animationBehavior = .none
         let view = NSView()
         view.wantsLayer = true
         view.layer?.addSublayer(slide)

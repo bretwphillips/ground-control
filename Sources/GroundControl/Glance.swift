@@ -92,14 +92,21 @@ final class Glance {
                 hide()
                 return
             }
-            // The real gate opens under the picture of it, which goes once the apps have come
-            // forward and redrawn. Fading would show them blink through it, and the windows'
-            // bars change colour as they take focus; a cut is like clicking into them.
+            // The real gate opens under the picture of it, which fades once the apps have come
+            // forward and redrawn, softening what differs: bars taking focus colour, content
+            // that changed while hidden.
             feed = UUID()
             gates.open(gate)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self, self.session == session else { return }
-                hide()
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.2
+                    context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                    self.panel.animator().alphaValue = 0
+                } completionHandler: { [weak self] in
+                    guard let self, self.session == session else { return }
+                    hide()
+                }
             }
         }
     }

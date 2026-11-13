@@ -20,6 +20,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updates = Updates()
     private var groundStopIcon: AnyCancellable?
     private var walkthrough: Walkthrough?
+    private var glance: Glance?
+    /// A gate's shortcut held down: the gate, which way it lies, and the wait before glancing.
+    private var held: (gate: Gate, direction: Int, timer: Timer)?
+
+    /// The gate a shortcut goes to, and which way it lies, for the shortcuts that go to one.
+    private func target(of action: HotKeys.Action, _ gates: GateController) -> (Gate, Int)? {
+        let gate: Gate?
+        switch action {
+        case .gate(let index):
+            let all = gateStore.active
+            gate = index < all.count ? all[index] : nil
+        case .named(.back): gate = gateStore.previous.flatMap { id in gateStore.gates.first { $0.id == id } }
+        case .named(.gateLeft): return gates.neighbour(by: -1).map { ($0, -1) }
+        case .named(.gateRight): return gates.neighbour(by: 1).map { ($0, 1) }
+        default: return nil
+        }
+        return gate.map { ($0, gates.direction(to: $0)) }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = TypingFocus.shared
@@ -28,20 +46,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let strip = StripController(
             tracker: tracker, previews: previews, settings: settings, permissions: permissions, gateStore: gateStore
         )
+        let glance = Glance(gates: strip.gates, previews: previews)
+        self.glance = glance
         hotKeys.onAction = { [weak self, weak strip] action in
-            guard let gates = strip?.gates else { return }
-            if case .named(.answer) = action {} else if case .named(.desktop) = action {} else { strip?.flash() }
+            guard let self, let strip else { return }
+            let gates: GateController = strip.gates
+            // A gate's key switches when tapped and glances at the gate while held.
+            if let (gate, direction) = target(of: action, gates) {
+                guard held == nil else { return }
+                let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { _ in
+                    glance.begin(gate, direction: direction)
+                    glance.move(to: 1, animated: true)
+                }
+                held = (gate, direction, timer)
+                return
+            }
+            if case .named(.answer) = action {} else if case .named(.desktop) = action {} else { strip.flash() }
             switch action {
-            case .gate(let index):
-                guard let all = self?.gateStore.active, index < all.count else { return }
-                gates.switchTo(all[index])
-            case .named(.back): gates.openPrevious()
-            case .named(.gateLeft): gates.step(by: -1)
-            case .named(.gateRight): gates.step(by: 1)
+            case .gate, .named(.back), .named(.gateLeft), .named(.gateRight): break
             case .named(.appNext): gates.stepApp(by: 1)
             case .named(.appPrevious): gates.stepApp(by: -1)
-            case .named(.answer): self?.flyBy?.answer()
+            case .named(.answer): self.flyBy?.answer()
             case .named(.desktop): gates.desktop.toggle()
+            }
+        }
+        hotKeys.onRelease = { [weak self, weak strip] _ in
+            guard let self, let (gate, direction, timer) = held else { return }
+            held = nil
+            if timer.isValid {
+                timer.invalidate()
+                strip?.flash()
+                strip?.gates.switchTo(gate, direction: direction)
+            } else {
+                glance.end(commit: false)
             }
         }
         let flyBy = FlyBy(
@@ -56,9 +93,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previews.onFinished = { [weak tracker] pid in tracker?.finished(pid: pid) }
         meeting.onChange = { [weak self] live in self?.meetingChanged(live) }
         let swipes = SwipeWatcher.shared
-        swipes.onSwipe = { [weak strip] step in
-            strip?.gates.step(by: step)
-            strip?.flash()
+        // A swipe brings the next gate in under the fingers: past halfway it goes there, otherwise
+        // it was only a look.
+        swipes.onScrub = { [weak strip] scrub in
+            switch scrub {
+            case .began(let step):
+                guard let gate = strip?.gates.neighbour(by: step) else { return }
+                glance.begin(gate, direction: step)
+            case .moved(let progress):
+                glance.move(to: progress)
+            case .ended(let commit):
+                glance.end(commit: commit)
+                if commit { strip?.flash() }
+            }
         }
         swipeFingers = settings.$swipeFingers.sink { fingers in
             swipes.fingers = fingers

@@ -5,8 +5,16 @@ import AppKit
 /// framework, as gesture apps like BetterTouchTool do. It needs no permission; if a macOS update
 /// changes the framework, swiping just stops working.
 final class SwipeWatcher {
-    /// -1 for a swipe to the left, 1 to the right.
-    var onSwipe: ((Int) -> Void)?
+    enum Scrub {
+        /// Toward the gate this many places along: 1 for a swipe to the left, -1 to the right.
+        case began(Int)
+        /// How far, 0 to 1, a fifth of the trackpad past where it started being all the way.
+        case moved(CGFloat)
+        /// Lifted: whether it went far enough, or fast enough, to go there.
+        case ended(commit: Bool)
+    }
+
+    var onScrub: ((Scrub) -> Void)?
     var fingers = 0
 
     static let shared = SwipeWatcher()
@@ -15,6 +23,8 @@ final class SwipeWatcher {
     private var begun: (at: Double, points: [Int32: MTPoint])?
     private var fired = false
     private var started = false
+    /// The swipe under way: which way, how far, and how fast it was last moving.
+    private var scrub: (step: Int, progress: Float, at: Double, speed: Float)?
 
     func start() {
         guard !started, let framework = dlopen("/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport", RTLD_NOW),
@@ -38,36 +48,72 @@ final class SwipeWatcher {
         log.notice("swipes: watching \(devices.count) trackpad(s), touch size \(MemoryLayout<MTTouch>.stride)")
     }
 
-    /// Fires once per swipe: the same fingers all moving one way, mostly sideways, a tenth of the
-    /// trackpad on average within a moment. A finger landing or lifting starts it over, so a thumb
-    /// or palm joining a scroll isn't measured against where the scroll began; lifting them all
-    /// allows the next swipe.
+    /// A swipe starts once the same fingers all move one way, mostly sideways, a little within a
+    /// moment, and from then on follows them until they lift. A finger landing or lifting ends it,
+    /// so a thumb or palm joining a scroll isn't measured against where the scroll began; lifting
+    /// them all allows the next swipe.
     fileprivate func frame(_ touches: UnsafeMutablePointer<MTTouch>?, count: Int) {
         guard fingers > 0, let touches, count > 0 else {
+            finish()
             begun = nil
             fired = false
             return
         }
         guard count == fingers else {
+            finish()
             begun = nil
             return
         }
         let now = touches[0].timestamp
         let points = Dictionary((0..<count).map { (touches[$0].identifier, touches[$0].normalized.position) }) { a, _ in a }
         guard !fired else { return }
-        guard let begun, Set(begun.points.keys) == Set(points.keys), now - begun.at < 0.6 else {
+        guard let begun, Set(begun.points.keys) == Set(points.keys) else {
+            finish()
             self.begun = (now, points)
             return
         }
         let moves = points.compactMap { id, p in begun.points[id].map { (dx: p.x - $0.x, dy: p.y - $0.y) } }
         let dx = moves.reduce(Float(0)) { $0 + $1.dx } / Float(moves.count)
         let dy = moves.reduce(Float(0)) { $0 + $1.dy } / Float(moves.count)
-        guard abs(dx) > 0.1, abs(dx) > 2 * abs(dy),
-              moves.allSatisfy({ $0.dx * dx > 0 && abs($0.dx) > 0.04 }) else { return }
-        fired = true
-        // Like moving between desktops: swiping left brings the next one in from the right.
+
+        if var current = scrub {
+            // Like moving between desktops: swiping left brings the next one in from the right.
+            let progress = Self.progress(-dx * Float(current.step))
+            let elapsed = Float(now - current.at)
+            if elapsed > 0 { current.speed = current.speed * 0.5 + (progress - current.progress) / elapsed * 0.5 }
+            current.progress = progress
+            current.at = now
+            scrub = current
+            DispatchQueue.main.async { self.onScrub?(.moved(CGFloat(progress))) }
+            return
+        }
+        guard now - begun.at < 0.6 else {
+            self.begun = (now, points)
+            return
+        }
+        guard abs(dx) > 0.03, abs(dx) > 2 * abs(dy),
+              moves.allSatisfy({ $0.dx * dx > 0 && abs($0.dx) > 0.015 }) else { return }
         let step = dx < 0 ? 1 : -1
-        DispatchQueue.main.async { self.onSwipe?(step) }
+        let progress = Self.progress(abs(dx))
+        scrub = (step, progress, now, 0)
+        DispatchQueue.main.async {
+            self.onScrub?(.began(step))
+            self.onScrub?(.moved(CGFloat(progress)))
+        }
+    }
+
+    /// Counted from where the swipe was noticed, so the gate starts from the edge, not partway in.
+    private static func progress(_ distance: Float) -> Float {
+        min(max((distance - 0.03) / 0.2, 0), 1)
+    }
+
+    /// Past halfway goes there; so does a flick still moving that way as it lifts.
+    private func finish() {
+        guard let current = scrub else { return }
+        scrub = nil
+        fired = true
+        let commit = current.progress > 0.5 || (current.progress > 0.15 && current.speed > 2)
+        DispatchQueue.main.async { self.onScrub?(.ended(commit: commit)) }
     }
 }
 
